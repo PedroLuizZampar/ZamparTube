@@ -44,3 +44,6 @@ next-env.d.ts
 
 # superpowers workspace
 .superpowers/
+
+# local dev database
+/.pglite/

@@ -1,0 +1,42 @@
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import { RefreshCw } from "lucide-react";
+import { syncNowAction } from "@/app/(app)/actions";
+
+export function SyncButton({ compact = false }: { compact?: boolean }) {
+  const [pending, start] = useTransition();
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(""), 6000);
+    return () => clearTimeout(t);
+  }, [message]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => start(async () => setMessage((await syncNowAction()).message))}
+        className={`flex items-center gap-2 rounded-lg text-sm font-medium text-muted transition-colors hover:bg-surface hover:text-text disabled:cursor-wait disabled:opacity-70 ${
+          compact ? "p-2" : "w-full px-3 py-2"
+        }`}
+        aria-label="Atualizar agora"
+      >
+        <RefreshCw className={`h-5 w-5 ${pending ? "animate-spin text-accent" : ""}`} strokeWidth={1.75} />
+        {!compact && (pending ? "Atualizando…" : "Atualizar agora")}
+      </button>
+      <p
+        role="status"
+        aria-live="polite"
+        className={`absolute z-40 w-64 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-opacity ${
+          compact ? "right-0 top-full mt-2" : "bottom-full left-0 mb-2"
+        } ${message ? "opacity-100" : "pointer-events-none opacity-0"}`}
+      >
+        {message}
+      </p>
+    </div>
+  );
+}

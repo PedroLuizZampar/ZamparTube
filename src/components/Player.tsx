@@ -160,7 +160,7 @@ export function Player({ videoId, durationSeconds, startAt, nextHref }: Props) {
   }, [videoId, initialStart, ended, failed, round, router]);
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+    <div className="relative aspect-video w-full overflow-hidden rounded-[14px] bg-black">
       {failed ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-surface px-6 text-center">
           <p className="max-w-md text-pretty">Não foi possível tocar este vídeo aqui.</p>
@@ -168,7 +168,7 @@ export function Player({ videoId, durationSeconds, startAt, nextHref }: Props) {
             href={`https://www.youtube.com/watch?v=${videoId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+            className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover"
           >
             <ExternalLink className="h-4 w-4" /> Abrir no YouTube
           </a>

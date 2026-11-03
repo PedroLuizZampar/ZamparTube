@@ -19,14 +19,14 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
       </p>
       <div className="mt-6 flex gap-2">
         {expired ? (
-          <Link href="/login" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover">
+          <Link href="/login" className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">
             Entrar
           </Link>
         ) : (
           <button
             type="button"
             onClick={reset}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover"
           >
             Tentar de novo
           </button>

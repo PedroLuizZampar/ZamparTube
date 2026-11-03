@@ -31,7 +31,7 @@ export function Description({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   if (!text.trim()) return null;
   return (
-    <div className="mt-4 rounded-xl bg-surface p-4">
+    <div className="mt-4 rounded-[14px] bg-surface p-4">
       <p className={`whitespace-pre-line break-words text-sm leading-relaxed text-text/90 ${open ? "" : "line-clamp-3"}`}>
         {text}
       </p>

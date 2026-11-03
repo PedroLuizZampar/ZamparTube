@@ -21,14 +21,14 @@ export function LoginForm({ next }: { next: string }) {
         className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-text outline-none focus:border-accent"
       />
       {state.error && (
-        <p role="alert" className="text-sm text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {state.error}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="mt-2 rounded-lg bg-accent px-4 py-2.5 font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
+        className="mt-2 rounded-full bg-accent px-4 py-2.5 font-medium text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-60"
       >
         {pending ? "Entrando…" : "Entrar"}
       </button>

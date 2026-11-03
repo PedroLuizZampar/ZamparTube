@@ -27,7 +27,7 @@ export function VideoCard({ video, onFeed = false, watchQuery = "", hideChannel 
     <article className="group flex flex-col gap-3">
       <Link
         href={href}
-        className="relative block aspect-video overflow-hidden rounded-xl bg-surface-2 outline-offset-4"
+        className="relative block aspect-video overflow-hidden rounded-[14px] bg-surface-2 outline-offset-4"
         aria-label={video.title}
       >
         {video.thumbnailUrl && (
@@ -73,7 +73,7 @@ export function VideoCard({ video, onFeed = false, watchQuery = "", hideChannel 
           </Link>
         )}
         <div className="min-w-0 flex-1">
-          <Link href={href} className="line-clamp-2 font-medium leading-snug text-text hover:text-white">
+          <Link href={href} className="line-clamp-2 font-medium leading-snug text-text hover:text-accent">
             {video.title}
           </Link>
           <p className="mt-1 truncate text-sm text-muted">

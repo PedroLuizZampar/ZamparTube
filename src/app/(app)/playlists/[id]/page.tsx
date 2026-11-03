@@ -41,7 +41,7 @@ export default async function PlaylistPage({ params }: PageProps<"/playlists/[id
         {next && (
           <Link
             href={`/watch/${next.id}?list=${id}`}
-            className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+            className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover"
           >
             <Play className="h-4 w-4 fill-current" /> Tocar a seguir
           </Link>
@@ -57,7 +57,7 @@ export default async function PlaylistPage({ params }: PageProps<"/playlists/[id
       ) : (
         <ol className="flex flex-col gap-1">
           {items.map((v, i) => (
-            <li key={v.id} className="group flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-surface">
+            <li key={v.id} className="group flex items-center gap-3 rounded-[14px] p-2 transition-colors hover:bg-surface">
               <span className="w-5 shrink-0 text-center text-sm tabular-nums text-muted">{i + 1}</span>
               <Link href={`/watch/${v.id}?list=${id}`} className="flex min-w-0 flex-1 items-center gap-3">
                 <span className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-lg bg-surface-2 sm:w-40">

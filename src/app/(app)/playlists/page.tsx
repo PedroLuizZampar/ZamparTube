@@ -21,7 +21,7 @@ export default async function PlaylistsPage() {
           const Icon = p.isWatchLater ? Clock : ListVideo;
           return (
             <Link key={p.id} href={`/playlists/${p.id}`} className="group flex flex-col gap-3">
-              <span className="relative block aspect-video overflow-hidden rounded-xl bg-surface-2">
+              <span className="relative block aspect-video overflow-hidden rounded-[14px] bg-surface-2">
                 {p.coverThumbnailUrl ? (
                   <Image
                     src={p.coverThumbnailUrl}
@@ -41,7 +41,7 @@ export default async function PlaylistsPage() {
                 </span>
               </span>
               <span>
-                <span className="block font-medium group-hover:text-white">{p.name}</span>
+                <span className="block font-medium group-hover:text-accent">{p.name}</span>
                 <span className="text-sm text-muted">
                   {p.count === 1 ? "1 vídeo" : `${p.count} vídeos`}
                 </span>

@@ -40,7 +40,7 @@ export default async function WatchPage({ params, searchParams }: PageProps<"/wa
       {video.embeddable ? (
         <Player key={video.id} videoId={video.id} durationSeconds={video.durationSeconds} startAt={startAt} nextHref={nextHref} />
       ) : (
-        <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+        <div className="relative aspect-video w-full overflow-hidden rounded-[14px] bg-black">
           {video.thumbnailUrl && <Image src={video.thumbnailUrl} alt="" fill unoptimized className="object-cover opacity-40" />}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
             <p className="max-w-md text-pretty">O canal não permite assistir este vídeo fora do YouTube.</p>
@@ -48,7 +48,7 @@ export default async function WatchPage({ params, searchParams }: PageProps<"/wa
               href={`https://www.youtube.com/watch?v=${video.id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+              className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover"
             >
               <ExternalLink className="h-4 w-4" /> Abrir no YouTube
             </a>
@@ -62,7 +62,7 @@ export default async function WatchPage({ params, searchParams }: PageProps<"/wa
         <Link href={`/channel/${video.channelId}`} className="flex items-center gap-3">
           <ChannelAvatar src={video.channelAvatarSrc} name={video.channelTitle} size={40} />
           <span>
-            <span className="block font-medium hover:text-white">{video.channelTitle}</span>
+            <span className="block font-medium hover:text-accent">{video.channelTitle}</span>
             <time dateTime={video.publishedAt.toISOString()} className="block text-sm text-muted">
               {formatRelative(video.publishedAt)}
             </time>

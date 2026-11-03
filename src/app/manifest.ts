@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Seus canais, sem distrações.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0B0F17",
-    theme_color: "#0B0F17",
+    background_color: "#1B1C20",
+    theme_color: "#1B1C20",
     lang: "pt-BR",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png" },

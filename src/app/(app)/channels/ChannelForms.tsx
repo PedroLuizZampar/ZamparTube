@@ -17,7 +17,7 @@ type Category = { id: number; name: string };
 const input =
   "rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted/80 outline-none focus:border-accent";
 const primary =
-  "flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-60";
+  "flex items-center justify-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-60";
 const ghostIcon = "rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text disabled:opacity-50";
 
 export function AddChannelForm({ categories }: { categories: Category[] }) {
@@ -52,7 +52,7 @@ export function AddChannelForm({ categories }: { categories: Category[] }) {
         </button>
       </div>
       {state.message && (
-        <p role="status" className={`text-sm ${state.ok ? "text-accent" : "text-red-400"}`}>
+        <p role="status" className={`text-sm ${state.ok ? "text-accent" : "text-danger"}`}>
           {state.message}
         </p>
       )}
@@ -127,7 +127,7 @@ export function CreateCategoryForm() {
           Criar
         </button>
       </div>
-      {!state.ok && <p className="text-sm text-red-400">{state.message}</p>}
+      {!state.ok && <p className="text-sm text-danger">{state.message}</p>}
     </form>
   );
 }
@@ -176,7 +176,7 @@ export function CategoryRow({ category }: { category: Category }) {
             <X className="h-4 w-4" />
           </button>
         </form>
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
       </li>
     );
   }

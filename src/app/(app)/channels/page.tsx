@@ -36,7 +36,7 @@ export default async function ChannelsPage() {
                 <Link href={`/channel/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <ChannelAvatar src={c.avatarSrc} name={c.title} size={40} />
                   <span className="min-w-0">
-                    <span className="block truncate font-medium hover:text-white">{c.title}</span>
+                    <span className="block truncate font-medium hover:text-accent">{c.title}</span>
                     <span className="block truncate text-sm text-muted">
                       {[
                         c.handle,

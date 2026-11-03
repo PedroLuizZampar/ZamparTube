@@ -10,7 +10,7 @@ export function CategoryFilter({
   if (categories.length === 0) return null;
   const chip = (active: boolean) =>
     `shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-      active ? "bg-text text-bg" : "bg-surface-2 text-text hover:bg-border"
+      active ? "bg-accent/15 text-accent" : "bg-surface-2 text-text hover:bg-border"
     }`;
   return (
     <nav aria-label="Categorias" className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">

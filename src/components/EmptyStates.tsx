@@ -30,7 +30,7 @@ export function NoChannels() {
       </p>
       <Link
         href="/channels"
-        className="mt-8 flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 font-medium text-white transition-colors hover:bg-accent-hover"
+        className="mt-8 flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 font-medium text-on-accent transition-colors hover:bg-accent-hover"
       >
         <Plus className="h-4 w-4" strokeWidth={2.5} /> Adicionar canal
       </Link>

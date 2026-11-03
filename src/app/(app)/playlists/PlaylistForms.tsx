@@ -28,12 +28,12 @@ export function CreatePlaylistForm() {
         <button
           type="submit"
           disabled={pending}
-          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
+          className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-60"
         >
           <Plus className="h-4 w-4" strokeWidth={2.5} /> Criar
         </button>
       </div>
-      {!state.ok && <p className="text-sm text-red-400">{state.message}</p>}
+      {!state.ok && <p className="text-sm text-danger">{state.message}</p>}
     </form>
   );
 }
@@ -80,7 +80,7 @@ export function PlaylistHeaderControls({ id, name, isWatchLater }: { id: number;
         >
           <X className="h-4 w-4" />
         </button>
-        {error && <p className="w-full text-sm text-red-400">{error}</p>}
+        {error && <p className="w-full text-sm text-danger">{error}</p>}
       </form>
     );
   }

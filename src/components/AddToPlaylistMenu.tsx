@@ -75,7 +75,7 @@ export function AddToPlaylistMenu({
         <ListPlus className="h-4 w-4" /> Salvar na playlist
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-xl border border-border bg-surface-2 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.5)]">
+        <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-[14px] border border-border bg-surface-2 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.5)]">
           {others.length === 0 && <p className="px-2 py-1.5 text-sm text-muted">Você ainda não tem playlists.</p>}
           <ul className="max-h-64 overflow-y-auto">
             {others.map((p) => (
@@ -121,12 +121,12 @@ export function AddToPlaylistMenu({
               type="submit"
               disabled={pending || !name.trim()}
               aria-label="Criar playlist com este vídeo"
-              className="rounded-lg bg-accent p-2 text-white hover:bg-accent-hover disabled:opacity-50"
+              className="rounded-full bg-accent p-2 text-on-accent hover:bg-accent-hover disabled:opacity-50"
             >
               <Plus className="h-4 w-4" strokeWidth={2.5} />
             </button>
           </form>
-          {error && <p className="px-2 pt-1 text-sm text-red-400">{error}</p>}
+          {error && <p className="px-2 pt-1 text-sm text-danger">{error}</p>}
         </div>
       )}
     </div>

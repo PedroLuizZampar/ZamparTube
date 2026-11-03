@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { createTestDb } from "../../helpers/db";
 import { channels, playlists, videos } from "@/lib/db/schema";
 
 describe("schema", () => {
+  // Build the migrated template up front (hook timeout), not inside the first test.
+  beforeAll(async () => {
+    await createTestDb();
+  });
+
   it("migrates and seeds exactly one watch-later playlist", async () => {
     const db = await createTestDb();
     const rows = await db.select().from(playlists);

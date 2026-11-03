@@ -113,9 +113,16 @@ Navegação: barra lateral no desktop e barra inferior no celular.
 
 ### 6.6 Visual
 
-- Tema escuro, inspirado no layout geral de uma plataforma de vídeo (grade de thumbnails), mas com identidade própria.
-- Cor de destaque azul (ex.: `#3B82F6` a `#2563EB`). Fundo quase preto (ex.: `#0B0F17`) e superfícies em cinza-azulado escuro.
-- Nome e logo próprios: "ZamparTube" com um ícone simples azul. Nada de logo ou ícone de "play" vermelho.
+Revisado em 2026-11-03 (rebrand "soft", escolhido pelo usuário no comparador visual: paleta A + Geist).
+
+- Tema escuro suave, com baixo contraste. Quem chama atenção são as miniaturas dos vídeos, não a interface.
+- Fundo grafite , superfícies  / , borda .
+- Texto creme  e texto secundário .
+- Destaque azul-acinzentado  (passar o mouse: ), com texto escuro  sobre ele. Erros em rosado suave .
+- Destaque usado com parcimônia: menu ativo, filtro selecionado e confirmações têm só um fundo levemente azulado. Cor cheia fica para uma ou duas ações por tela, em botões de pílula.
+- Cantos de 14 px nos cards e no player.
+- Fonte Geist.
+- Logo: quadradinho azul-acinzentado com o símbolo de play em grafite. Nada de vermelho e nada da identidade do YouTube.
 
 ### 6.7 Modelo de dados (sugestão)
 

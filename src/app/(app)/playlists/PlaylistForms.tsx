@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   createPlaylistAction,
   deletePlaylistAction,
@@ -91,17 +92,18 @@ export function PlaylistHeaderControls({ id, name, isWatchLater }: { id: number;
         <Pencil className="h-4 w-4" strokeWidth={1.75} />
       </button>
       {!isWatchLater && (
-        <button
-          type="button"
-          disabled={pending}
-          className={ghostIcon}
-          aria-label="Apagar playlist"
-          onClick={() => {
-            if (confirm(`Apagar a playlist "${name}"? Os vídeos continuam no app.`)) start(() => deletePlaylistAction(id));
-          }}
-        >
-          <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-        </button>
+        <ConfirmDialog
+          title={`Apagar a playlist "${name}"?`}
+          description="Só a playlist é apagada. Os vídeos continuam no app."
+          confirmLabel="Apagar playlist"
+          destructive
+          onConfirm={() => start(() => deletePlaylistAction(id))}
+          trigger={
+            <button type="button" disabled={pending} className={ghostIcon} aria-label="Apagar playlist">
+              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          }
+        />
       )}
     </div>
   );

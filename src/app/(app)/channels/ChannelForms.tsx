@@ -2,6 +2,8 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { Check, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Select, type SelectOption } from "@/components/ui/Select";
 import {
   addChannelAction,
   createCategoryAction,
@@ -13,6 +15,11 @@ import {
 } from "./actions";
 
 type Category = { id: number; name: string };
+
+const categoryOptions = (categories: Category[]): SelectOption[] => [
+  { value: "", label: "Sem categoria" },
+  ...categories.map((c) => ({ value: String(c.id), label: c.name })),
+];
 
 const input =
   "rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted/80 outline-none focus:border-accent";
@@ -37,14 +44,7 @@ export function AddChannelForm({ categories }: { categories: Category[] }) {
           autoComplete="off"
         />
         {categories.length > 0 && (
-          <select name="categoryId" defaultValue="" className={input} aria-label="Categoria">
-            <option value="">Sem categoria</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <Select name="categoryId" ariaLabel="Categoria" options={categoryOptions(categories)} className="sm:w-44" />
         )}
         <button type="submit" disabled={pending} className={primary}>
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" strokeWidth={2.5} />}
@@ -75,38 +75,27 @@ export function ChannelControls({
   return (
     <div className="flex items-center gap-1">
       {categories.length > 0 && (
-        <select
-          aria-label={`Categoria de ${title}`}
-          defaultValue={categoryId ?? ""}
+        <Select
+          ariaLabel={`Categoria de ${title}`}
+          defaultValue={categoryId ? String(categoryId) : ""}
           disabled={pending}
-          onChange={(e) => {
-            const value = e.target.value ? Number(e.target.value) : null;
-            start(() => setChannelCategoryAction(channelId, value));
-          }}
-          className={`${input} max-w-40 py-1.5`}
-        >
-          <option value="">Sem categoria</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onValueChange={(v) => start(() => setChannelCategoryAction(channelId, v ? Number(v) : null))}
+          options={categoryOptions(categories)}
+          className="w-40 py-1.5"
+        />
       )}
-      <button
-        type="button"
-        disabled={pending}
-        className={ghostIcon}
-        title="Remover canal"
-        aria-label={`Remover ${title}`}
-        onClick={() => {
-          if (confirm(`Remover "${title}"? Os vídeos dele saem do feed e da busca, mas continuam nas suas playlists.`)) {
-            start(() => removeChannelAction(channelId));
-          }
-        }}
-      >
-        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-      </button>
+      <ConfirmDialog
+        title={`Remover "${title}"?`}
+        description="Os vídeos dele saem do feed e da busca, mas continuam nas suas playlists."
+        confirmLabel="Remover canal"
+        destructive
+        onConfirm={() => start(() => removeChannelAction(channelId))}
+        trigger={
+          <button type="button" disabled={pending} className={ghostIcon} title="Remover canal" aria-label={`Remover ${title}`}>
+            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+          </button>
+        }
+      />
     </div>
   );
 }
@@ -187,19 +176,18 @@ export function CategoryRow({ category }: { category: Category }) {
       <button type="button" className={ghostIcon} aria-label={`Renomear ${category.name}`} onClick={() => setEditing(true)}>
         <Pencil className="h-4 w-4" strokeWidth={1.75} />
       </button>
-      <button
-        type="button"
-        disabled={pending}
-        className={ghostIcon}
-        aria-label={`Apagar ${category.name}`}
-        onClick={() => {
-          if (confirm(`Apagar a categoria "${category.name}"? Os canais dela ficam sem categoria.`)) {
-            start(() => deleteCategoryAction(category.id));
-          }
-        }}
-      >
-        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-      </button>
+      <ConfirmDialog
+        title={`Apagar a categoria "${category.name}"?`}
+        description="Os canais dela continuam no app, só ficam sem categoria."
+        confirmLabel="Apagar categoria"
+        destructive
+        onConfirm={() => start(() => deleteCategoryAction(category.id))}
+        trigger={
+          <button type="button" disabled={pending} className={ghostIcon} aria-label={`Apagar ${category.name}`}>
+            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+          </button>
+        }
+      />
     </li>
   );
 }

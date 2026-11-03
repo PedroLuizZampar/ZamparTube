@@ -63,3 +63,9 @@ describe("applyProbeResult", () => {
     expect(applyProbeResult(state, "unknown")).toEqual({ shortsCheck: "short", shortsCheckFailures: 5, isShort: true });
   });
 });
+
+describe("classifyVideo — ended live without duration yet", () => {
+  it("ended live reporting 0s stays pending", () => {
+    expect(classifyVideo(vid("a", { durationSeconds: 0, liveActualEndTime: daysAgo(0) })).liveState).toBe("pending");
+  });
+});

@@ -155,3 +155,10 @@ describe("YouTube client", () => {
     expect(isQuotaExceeded(new Error("boom"))).toBe(false);
   });
 });
+
+describe("YouTube client — review 1 fixes", () => {
+  it("throws when a 2xx response body is not JSON (never treat it as 'no videos')", async () => {
+    const fn = (async () => new Response("<html>oops</html>", { status: 200 })) as typeof fetch;
+    await expect(createYouTubeClient("KEY", fn).getVideos(["a"])).rejects.toThrow();
+  });
+});

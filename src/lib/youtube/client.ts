@@ -73,12 +73,16 @@ export function createYouTubeClient(apiKey: string, fetchFn: typeof fetch = fetc
     for (const [k, v] of Object.entries(params)) if (v !== undefined) url.searchParams.set(k, v);
     url.searchParams.set("key", apiKey);
     const res = await fetchFn(url, { cache: "no-store" });
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string; errors?: { reason?: string }[] };
-    };
-    if (!res.ok) {
-      const reason = body.error?.errors?.[0]?.reason ?? "unknown";
-      throw new YouTubeApiError(res.status, reason, body.error?.message ?? `YouTube API ${res.status}`);
+    const body = (await res.json().catch(() => undefined)) as
+      | { error?: { message?: string; errors?: { reason?: string }[] } }
+      | undefined;
+    if (res.ok && body === undefined) {
+      // Never read an unparseable success as "no items": the sync would delete videos.
+      throw new YouTubeApiError(res.status, "invalidResponse", "YouTube API returned a non-JSON response");
+    }
+    if (!res.ok || !body) {
+      const reason = body?.error?.errors?.[0]?.reason ?? "unknown";
+      throw new YouTubeApiError(res.status, reason, body?.error?.message ?? `YouTube API ${res.status}`);
     }
     return body as T;
   }

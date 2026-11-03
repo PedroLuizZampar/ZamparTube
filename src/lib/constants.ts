@@ -12,6 +12,8 @@ export const WATCHED_RATIO = 0.9;
 export const PROGRESS_SAVE_INTERVAL_MS = 10_000;
 /** Max playlistItems pages read per playlist per sync run (50 videos each). */
 export const MAX_PAGES_PER_RUN = 20;
+/** Max already-saved videos (in feed or in playlists) re-checked per channel per run to drop deleted ones. */
+export const MAX_RECHECK_PER_RUN = 200;
 /** Max shorts probes per channel per sync run. */
 export const MAX_PROBES_PER_RUN = 50;
 /** Default page size for video grids ("Carregar mais" adds this many). */

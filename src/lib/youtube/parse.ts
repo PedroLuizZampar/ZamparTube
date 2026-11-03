@@ -3,7 +3,7 @@ export type ChannelRef = { kind: "id"; id: string } | { kind: "handle"; handle: 
 export type ParseChannelResult = { ok: true; ref: ChannelRef } | { ok: false; error: string };
 
 const CHANNEL_ID = /^UC[\w-]{22}$/;
-const HANDLE = /^[\w.-]{3,30}$/;
+const HANDLE = /^[\p{L}\p{M}\p{N}_.\-·]{3,30}$/u;
 const YT_HOST = /^(?:www\.|m\.)?youtube\.com$/i;
 
 const ERR_EMPTY = "Cole o link do canal, o @ do canal ou o ID (UC…).";
@@ -28,7 +28,13 @@ export function parseChannelInput(input: string): ParseChannelResult {
 
   const [first, second] = url.pathname.split("/").filter(Boolean);
   if (!first) return { ok: false, error: ERR_INVALID };
-  if (first.startsWith("@")) return handleRef(decodeURIComponent(first.slice(1)));
+  if (first.startsWith("@")) {
+    try {
+      return handleRef(decodeURIComponent(first.slice(1)));
+    } catch {
+      return { ok: false, error: ERR_INVALID };
+    }
+  }
   if (first === "channel" && second && CHANNEL_ID.test(second)) return { ok: true, ref: { kind: "id", id: second } };
   if (first === "c" || first === "user") return { ok: false, error: ERR_LEGACY };
   return { ok: false, error: ERR_INVALID };

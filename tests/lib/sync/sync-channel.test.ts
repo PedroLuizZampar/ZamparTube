@@ -229,3 +229,79 @@ describe("syncChannel", () => {
     expect(await getVisibleVideo(db, "unverified")).toBeNull();
   });
 });
+
+describe("syncChannel — review 1 fixes", () => {
+  it("a regular in-feed video deleted on YouTube is removed from the DB and playlists", async () => {
+    await addChannel();
+    const yt = createFakeYouTube({
+      playlists: { [LF]: ["keep", "gone"], [LV]: [] },
+      videos: { keep: vid("keep"), gone: vid("gone") },
+    });
+    await syncChannel(deps(yt), CH);
+    const [wl] = await db.select().from(playlists);
+    await db.insert(playlistItems).values({ playlistId: wl.id, videoId: "gone", position: 0 });
+
+    delete yt.videos.gone;
+    const r = await syncChannel(deps(yt), CH);
+    expect(r.removed).toBe(1);
+    expect(await row("gone")).toBeUndefined();
+    expect(await row("keep")).toBeDefined();
+    expect(await db.select().from(playlistItems)).toHaveLength(0);
+  });
+
+  it("UULF disappearing during backfill clears the stale token and keeps syncing via UU", async () => {
+    await addChannel();
+    const ids = Array.from({ length: 1100 }, (_, i) => `b${i}`);
+    const yt = createFakeYouTube({
+      playlists: { [LF]: ids, [LV]: [], [UU]: ["brand-new", ...ids] },
+      videos: Object.fromEntries(["brand-new", ...ids].map((id) => [id, vid(id)])),
+    });
+    await syncChannel(deps(yt), CH);
+    expect((await channelRow()).backfillPageToken).not.toBeNull();
+
+    yt.missingPlaylists.push(LF);
+    // The real API rejects a UULF page token on the UU playlist.
+    const original = yt.listPlaylistPage.bind(yt);
+    yt.listPlaylistPage = async (id, token) => {
+      if (id === UU && token) {
+        const { YouTubeApiError } = await import("@/lib/youtube/client");
+        throw new YouTubeApiError(400, "invalidPageToken", "bad token");
+      }
+      return original(id, token);
+    };
+    await syncChannel(deps(yt), CH);
+    expect(await row("brand-new")).toBeDefined();
+    expect((await channelRow()).longPlaylistMissing).toBe(true);
+    expect((await channelRow()).backfillPageToken).toBeNull();
+  });
+
+  it("an invalid backfill token is dropped instead of failing the channel forever", async () => {
+    await addChannel({ lastSyncedAt: daysAgo(1), backfillPageToken: "999999" });
+    const yt = createFakeYouTube({ playlists: { [LF]: ["n"], [LV]: [] }, videos: { n: vid("n") } });
+    const original = yt.listPlaylistPage.bind(yt);
+    yt.listPlaylistPage = async (id, token) => {
+      if (token === "999999") {
+        const { YouTubeApiError } = await import("@/lib/youtube/client");
+        throw new YouTubeApiError(400, "invalidPageToken", "bad token");
+      }
+      return original(id, token);
+    };
+    const r = await syncChannel(deps(yt), CH);
+    expect(r.inserted).toBe(1);
+    expect((await channelRow()).backfillPageToken).toBeNull();
+  });
+
+  it("an ended live still reporting 0s duration stays pending until YouTube reports the real length", async () => {
+    await addChannel({ lastSyncedAt: daysAgo(1) });
+    const yt = createFakeYouTube({
+      playlists: { [LF]: [], [LV]: ["l"] },
+      videos: { l: vid("l", { durationSeconds: 0, liveActualEndTime: NOW }) },
+    });
+    await syncChannel(deps(yt), CH);
+    expect(await row("l")).toMatchObject({ liveState: "pending" });
+
+    yt.videos.l = vid("l", { durationSeconds: 3600, liveActualEndTime: NOW });
+    await syncChannel(deps(yt), CH);
+    expect(await row("l")).toMatchObject({ liveState: "ended", durationSeconds: 3600 });
+  });
+});

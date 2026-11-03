@@ -1,12 +1,13 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import {
   FEED_WINDOW_DAYS,
   MAX_PAGES_PER_RUN,
   MAX_PROBES_PER_RUN,
+  MAX_RECHECK_PER_RUN,
   SHORTS_PROBE_ENABLED,
 } from "@/lib/constants";
 import type { Db } from "@/lib/db/client";
-import { channels, videos } from "@/lib/db/schema";
+import { channels, playlistItems, videos, watchState } from "@/lib/db/schema";
 import { isPlaylistNotFound, isQuotaExceeded, type VideoDetails, type YouTubeClient } from "@/lib/youtube/client";
 import { livesPlaylistId, longVideosPlaylistId, uploadsPlaylistId } from "@/lib/youtube/parse";
 import type { ProbeResult } from "@/lib/youtube/shorts-probe";
@@ -59,15 +60,25 @@ export async function syncChannel(deps: SyncDeps, channelId: string): Promise<Ch
   let longPlaylistMissing = ch.longPlaylistMissing;
   const longSource = () => (longPlaylistMissing ? uploadsPlaylistId(channelId) : longVideosPlaylistId(channelId));
   let longResult;
+  let switchedToUploads = false;
   try {
     longResult = await collect(longSource(), !firstImport);
   } catch (e) {
     if (longPlaylistMissing || !isPlaylistNotFound(e)) throw e;
     longPlaylistMissing = true;
-    await db.update(channels).set({ longPlaylistMissing: true }).where(eq(channels.id, channelId));
+    switchedToUploads = true;
+    await db
+      .update(channels)
+      .set({ longPlaylistMissing: true, backfillPageToken: null })
+      .where(eq(channels.id, channelId));
     longResult = await collect(longSource(), !firstImport);
   }
-  let backfillPageToken = firstImport ? (longResult.nextToken ?? null) : ch.backfillPageToken;
+  // A UULF page token is meaningless on the UU playlist, so a switch drops any pending backfill.
+  let backfillPageToken = firstImport
+    ? (longResult.nextToken ?? null)
+    : switchedToUploads
+      ? null
+      : ch.backfillPageToken;
 
   // 2. Lives (UULV). Missing or broken playlist is not an error; quota still is.
   let liveIds: string[] = [];
@@ -79,10 +90,17 @@ export async function syncChannel(deps: SyncDeps, channelId: string): Promise<Ch
 
   // 3. Backfill older history in chunks across runs.
   const backfillIds = new Set<string>();
-  if (!firstImport && ch.backfillPageToken) {
-    const res = await collect(longSource(), false, ch.backfillPageToken);
-    res.ids.forEach((id) => backfillIds.add(id));
-    backfillPageToken = res.nextToken ?? null;
+  if (!firstImport && backfillPageToken) {
+    try {
+      const res = await collect(longSource(), false, backfillPageToken);
+      res.ids.forEach((id) => backfillIds.add(id));
+      backfillPageToken = res.nextToken ?? null;
+    } catch (e) {
+      if (isQuotaExceeded(e)) throw e;
+      // An expired or invalid token must not block new videos forever: give up on the rest of the history.
+      console.warn(`[sync] backfill do canal ${channelId} abandonado:`, e);
+      backfillPageToken = null;
+    }
   }
 
   // 4. Insert videos we have not seen.
@@ -105,7 +123,8 @@ export async function syncChannel(deps: SyncDeps, channelId: string): Promise<Ch
     await db.insert(videos).values(rows.slice(i, i + 500)).onConflictDoNothing();
   }
 
-  // 5. Re-check lives that were upcoming or still running.
+  // 5. Re-check lives that were upcoming or still running, plus videos the user can still reach
+  //    (in the feed or in a playlist), so deleted/private ones disappear.
   const newIdSet = new Set(newIds);
   const pendingLives = (
     await db
@@ -115,17 +134,40 @@ export async function syncChannel(deps: SyncDeps, channelId: string): Promise<Ch
   )
     .map((r) => r.id)
     .filter((id) => !newIdSet.has(id));
+  const reachable = (
+    await db
+      .select({ id: videos.id })
+      .from(videos)
+      .leftJoin(watchState, eq(watchState.videoId, videos.id))
+      .where(
+        and(
+          eq(videos.channelId, channelId),
+          ne(videos.liveState, "pending"),
+          or(
+            and(eq(videos.inFeed, true), isNull(videos.dismissedAt), not(sql`coalesce(${watchState.watched}, false)`)),
+            exists(db.select({ one: sql`1` }).from(playlistItems).where(eq(playlistItems.videoId, videos.id))),
+          ),
+        ),
+      )
+      .orderBy(desc(videos.publishedAt))
+      .limit(MAX_RECHECK_PER_RUN)
+  )
+    .map((r) => r.id)
+    .filter((id) => !newIdSet.has(id));
   let removed = 0;
-  if (pendingLives.length > 0) {
-    const fresh = await yt.getVideos(pendingLives);
+  const recheck = [...pendingLives, ...reachable];
+  if (recheck.length > 0) {
+    const fresh = await yt.getVideos(recheck);
     const freshIds = new Set(fresh.map((d) => d.id));
+    const pendingSet = new Set(pendingLives);
     for (const d of fresh) {
+      if (!pendingSet.has(d.id)) continue;
       await db
         .update(videos)
         .set({ ...videoColumns(d), shortsCheckFailures: 0 })
         .where(eq(videos.id, d.id));
     }
-    const gone = pendingLives.filter((id) => !freshIds.has(id));
+    const gone = recheck.filter((id) => !freshIds.has(id));
     if (gone.length > 0) {
       await db.delete(videos).where(inArray(videos.id, gone));
       removed = gone.length;

@@ -12,10 +12,12 @@ export interface Classification {
 export function classifyVideo(d: VideoDetails): Classification {
   const isLiveNowOrUpcoming = d.liveBroadcastContent !== "none";
   const isEndedLive = !isLiveNowOrUpcoming && d.liveActualEndTime !== null;
+  // Right after a stream ends YouTube may still report P0D while processing; keep re-checking until it has a length.
+  const stillProcessing = isEndedLive && d.durationSeconds === 0;
   return {
     durationSeconds: d.durationSeconds,
     shortsCheck: d.durationSeconds <= SHORTS_MAX_SECONDS ? "pending" : "not_needed",
-    liveState: isLiveNowOrUpcoming ? "pending" : isEndedLive ? "ended" : "none",
+    liveState: isLiveNowOrUpcoming || stillProcessing ? "pending" : isEndedLive ? "ended" : "none",
     isLiveRecording: isEndedLive,
   };
 }

@@ -54,3 +54,20 @@ describe("playlist ids", () => {
     expect(uploadsPlaylistId("UCabc")).toBe("UUabc");
   });
 });
+
+describe("parseChannelInput — review 1 fixes", () => {
+  it("accepts accented handles", () => {
+    expect(parseChannelInput("https://www.youtube.com/@canalção")).toEqual({
+      ok: true,
+      ref: { kind: "handle", handle: "canalção" },
+    });
+    expect(parseChannelInput("https://www.youtube.com/@canal%C3%A7%C3%A3o")).toEqual({
+      ok: true,
+      ref: { kind: "handle", handle: "canalção" },
+    });
+  });
+
+  it("returns an error instead of throwing on malformed percent-encoding", () => {
+    expect(parseChannelInput("youtube.com/@abc%").ok).toBe(false);
+  });
+});

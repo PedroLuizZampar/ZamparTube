@@ -1,7 +1,20 @@
 import { asc, isNull, sql } from "drizzle-orm";
+import { getDb } from "@/lib/db/client";
 import { channels } from "@/lib/db/schema";
-import { isQuotaExceeded } from "@/lib/youtube/client";
+import { getEnv } from "@/lib/env";
+import { createYouTubeClient, isQuotaExceeded } from "@/lib/youtube/client";
+import { probeShort } from "@/lib/youtube/shorts-probe";
 import { syncChannel, type SyncDeps } from "./sync-channel";
+
+/** Real dependencies: Neon, YouTube Data API, live Shorts probe, current time. */
+export function createSyncDeps(): SyncDeps {
+  return {
+    db: getDb(),
+    yt: createYouTubeClient(getEnv().YOUTUBE_API_KEY),
+    probe: (id) => probeShort(id),
+    now: new Date(),
+  };
+}
 
 export interface RunSyncResult {
   synced: number;

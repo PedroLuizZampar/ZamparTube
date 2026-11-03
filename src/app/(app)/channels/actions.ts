@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSession } from "@/lib/auth/require";
 import { revalidatePath } from "next/cache";
 import {
   createCategory,
@@ -29,11 +30,12 @@ function parseCategoryId(value: FormDataEntryValue | null): number | null {
 }
 
 export async function addChannelAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  await requireSession();
   const parsed = parseChannelInput(String(form.get("channel") ?? ""));
   if (!parsed.ok) return { ok: false, message: parsed.error };
 
-  const deps = createSyncDeps();
   try {
+    const deps = createSyncDeps();
     const info = await deps.yt.getChannel(parsed.ref);
     if (!info) return { ok: false, message: "Canal não encontrado. Confira o link ou o @." };
     await upsertChannel(deps.db, info);
@@ -51,16 +53,19 @@ export async function addChannelAction(_prev: ActionState, form: FormData): Prom
 }
 
 export async function removeChannelAction(channelId: string): Promise<void> {
+  await requireSession();
   await removeChannel(getDb(), channelId);
   done();
 }
 
 export async function setChannelCategoryAction(channelId: string, categoryId: number | null): Promise<void> {
+  await requireSession();
   await setChannelCategory(getDb(), channelId, categoryId);
   done();
 }
 
 export async function createCategoryAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  await requireSession();
   try {
     await createCategory(getDb(), String(form.get("name") ?? ""));
     done();
@@ -71,6 +76,7 @@ export async function createCategoryAction(_prev: ActionState, form: FormData): 
 }
 
 export async function renameCategoryAction(id: number, name: string): Promise<ActionState> {
+  await requireSession();
   try {
     await renameCategory(getDb(), id, name);
     done();
@@ -81,6 +87,7 @@ export async function renameCategoryAction(id: number, name: string): Promise<Ac
 }
 
 export async function deleteCategoryAction(id: number): Promise<void> {
+  await requireSession();
   await deleteCategory(getDb(), id);
   done();
 }

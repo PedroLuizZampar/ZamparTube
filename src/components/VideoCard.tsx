@@ -41,14 +41,18 @@ export function VideoCard({ video, onFeed = false, watchQuery = "", hideChannel 
             }`}
           />
         )}
-        {video.isLiveRecording && (
-          <span className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-medium text-text">
-            <Radio className="h-3 w-3 text-accent" /> Gravação de live
-          </span>
-        )}
-        {video.watched && (
-          <span className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-medium text-text">
-            <Check className="h-3 w-3 text-accent" /> Assistido
+        {(video.isLiveRecording || video.watched) && (
+          <span className="absolute left-2 top-2 flex flex-wrap gap-1">
+            {video.watched && (
+              <span className="flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-medium text-text">
+                <Check className="h-3 w-3 text-accent" /> Assistido
+              </span>
+            )}
+            {video.isLiveRecording && (
+              <span className="flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-medium text-text">
+                <Radio className="h-3 w-3 text-accent" /> Gravação de live
+              </span>
+            )}
           </span>
         )}
         <span className="absolute bottom-2 right-2 rounded-md bg-black/80 px-1.5 py-0.5 text-xs font-medium tabular-nums text-text">
@@ -100,7 +104,7 @@ export function VideoCard({ video, onFeed = false, watchQuery = "", hideChannel 
               type="submit"
               title="Dispensar do feed"
               aria-label={`Dispensar "${video.title}" do feed`}
-              className="rounded-lg p-1.5 text-muted transition-opacity hover:bg-surface hover:text-text md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+              className="rounded-lg p-1.5 text-muted transition-opacity hover:bg-surface hover:text-text [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
             >
               <EyeOff className="h-4 w-4" strokeWidth={1.75} />
             </button>

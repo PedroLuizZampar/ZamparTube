@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSession } from "@/lib/auth/require";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { dismissFromFeed, saveProgress, setWatched } from "@/lib/queries/watch";
@@ -7,6 +8,7 @@ import { syncMessage } from "@/lib/sync/messages";
 import { createSyncDeps, runSync } from "@/lib/sync/run-sync";
 
 export async function syncNowAction(): Promise<{ message: string }> {
+  await requireSession();
   try {
     const result = await runSync(createSyncDeps(), { budgetMs: 45_000 });
     revalidatePath("/", "layout");
@@ -18,11 +20,13 @@ export async function syncNowAction(): Promise<{ message: string }> {
 }
 
 export async function dismissAction(videoId: string): Promise<void> {
+  await requireSession();
   await dismissFromFeed(getDb(), videoId);
   revalidatePath("/");
 }
 
 export async function setWatchedAction(videoId: string, watched: boolean): Promise<void> {
+  await requireSession();
   await setWatched(getDb(), videoId, watched);
   revalidatePath("/", "layout");
 }
@@ -32,6 +36,7 @@ export async function saveProgressAction(
   positionSeconds: number,
   durationSeconds: number,
 ): Promise<{ watched: boolean }> {
+  await requireSession();
   if (!Number.isFinite(positionSeconds) || !Number.isFinite(durationSeconds)) return { watched: false };
   return saveProgress(getDb(), videoId, positionSeconds, durationSeconds);
 }

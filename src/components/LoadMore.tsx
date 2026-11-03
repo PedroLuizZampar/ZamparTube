@@ -16,9 +16,3 @@ export function LoadMore({ basePath, params, current }: { basePath: string; para
     </div>
   );
 }
-
-/** Reads ?n= safely: at least PAGE_SIZE, at most 500. */
-export function pageLimit(n: string | string[] | undefined): number {
-  const value = Number(Array.isArray(n) ? n[0] : n);
-  return Number.isInteger(value) && value > PAGE_SIZE ? Math.min(value, 500) : PAGE_SIZE;
-}

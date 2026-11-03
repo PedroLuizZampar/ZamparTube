@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { LoadMore, pageLimit } from "@/components/LoadMore";
+import { LoadMore } from "@/components/LoadMore";
+import { canLoadMore, pageLimit } from "@/lib/paging";
 import { VideoCard, VideoGrid } from "@/components/VideoCard";
 import { getDb } from "@/lib/db/client";
 import { getChannel } from "@/lib/queries/channels";
@@ -38,7 +39,7 @@ export default async function ChannelPage({ params, searchParams }: PageProps<"/
           ))}
         </VideoGrid>
       )}
-      {page.hasMore && <LoadMore basePath={`/channel/${id}`} params={{}} current={limit} />}
+      {canLoadMore(page.hasMore, limit) && <LoadMore basePath={`/channel/${id}`} params={{}} current={limit} />}
     </>
   );
 }

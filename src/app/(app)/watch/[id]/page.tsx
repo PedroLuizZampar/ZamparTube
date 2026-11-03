@@ -37,7 +37,7 @@ export default async function WatchPage({ params, searchParams }: PageProps<"/wa
   return (
     <div className="mx-auto max-w-5xl">
       {video.embeddable ? (
-        <Player videoId={video.id} durationSeconds={video.durationSeconds} startAt={startAt} nextHref={nextHref} />
+        <Player key={video.id} videoId={video.id} durationSeconds={video.durationSeconds} startAt={startAt} nextHref={nextHref} />
       ) : (
         <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
           {video.thumbnailUrl && <Image src={video.thumbnailUrl} alt="" fill unoptimized className="object-cover opacity-40" />}

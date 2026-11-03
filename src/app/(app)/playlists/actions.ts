@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSession } from "@/lib/auth/require";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db/client";
@@ -28,6 +29,7 @@ function assertIds(playlistId: number, videoId?: string) {
 const done = () => revalidatePath("/", "layout");
 
 export async function createPlaylistAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  await requireSession();
   try {
     await createPlaylist(getDb(), String(form.get("name") ?? ""));
     done();
@@ -39,6 +41,7 @@ export async function createPlaylistAction(_prev: ActionState, form: FormData): 
 
 /** Creates a playlist and puts the video in it (from the watch page). */
 export async function createPlaylistWithVideoAction(name: string, videoId: string): Promise<ActionState> {
+  await requireSession();
   if (!VIDEO_ID.test(videoId)) return { ok: false, message: "Vídeo inválido" };
   try {
     const db = getDb();
@@ -52,6 +55,7 @@ export async function createPlaylistWithVideoAction(name: string, videoId: strin
 }
 
 export async function renamePlaylistAction(playlistId: number, name: string): Promise<ActionState> {
+  await requireSession();
   assertIds(playlistId);
   try {
     await renamePlaylist(getDb(), playlistId, name);
@@ -63,6 +67,7 @@ export async function renamePlaylistAction(playlistId: number, name: string): Pr
 }
 
 export async function deletePlaylistAction(playlistId: number): Promise<void> {
+  await requireSession();
   assertIds(playlistId);
   await deletePlaylist(getDb(), playlistId);
   done();
@@ -70,6 +75,7 @@ export async function deletePlaylistAction(playlistId: number): Promise<void> {
 }
 
 export async function setInPlaylistAction(playlistId: number, videoId: string, inPlaylist: boolean): Promise<void> {
+  await requireSession();
   assertIds(playlistId, videoId);
   const db = getDb();
   if (inPlaylist) await addToPlaylist(db, playlistId, videoId);
@@ -78,11 +84,13 @@ export async function setInPlaylistAction(playlistId: number, videoId: string, i
 }
 
 export async function setWatchLaterAction(videoId: string, inPlaylist: boolean): Promise<void> {
+  await requireSession();
   const db = getDb();
   await setInPlaylistAction(await getWatchLaterId(db), videoId, inPlaylist);
 }
 
 export async function moveInPlaylistAction(playlistId: number, videoId: string, direction: "up" | "down"): Promise<void> {
+  await requireSession();
   assertIds(playlistId, videoId);
   if (direction !== "up" && direction !== "down") throw new Error("Direção inválida");
   await moveInPlaylist(getDb(), playlistId, videoId, direction);

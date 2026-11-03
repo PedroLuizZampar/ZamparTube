@@ -1,6 +1,7 @@
 import { CategoryFilter } from "@/components/CategoryFilter";
 import { CaughtUp, NoChannels } from "@/components/EmptyStates";
-import { LoadMore, pageLimit } from "@/components/LoadMore";
+import { LoadMore } from "@/components/LoadMore";
+import { canLoadMore, pageLimit } from "@/lib/paging";
 import { VideoCard, VideoGrid } from "@/components/VideoCard";
 import { getDb } from "@/lib/db/client";
 import { listCategories, listChannels } from "@/lib/queries/channels";
@@ -28,7 +29,7 @@ export default async function FeedPage({ searchParams }: PageProps<"/">) {
           ))}
         </VideoGrid>
       )}
-      {feed.hasMore ? (
+      {canLoadMore(feed.hasMore, limit) ? (
         <LoadMore basePath="/" params={categoryId ? { categoria: String(categoryId) } : {}} current={limit} />
       ) : (
         <CaughtUp hadItems={feed.items.length > 0} />

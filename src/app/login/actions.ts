@@ -3,16 +3,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { checkPassword, createSessionToken, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth/session";
+import { safeNextPath } from "@/lib/auth/redirect";
 import { getEnv } from "@/lib/env";
 
 export interface LoginState {
   error?: string;
-}
-
-/** Only same-site relative paths are accepted as the post-login destination. */
-function safeNext(value: FormDataEntryValue | null): string {
-  const next = typeof value === "string" ? value : "";
-  return next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
 }
 
 export async function loginAction(_prev: LoginState, form: FormData): Promise<LoginState> {
@@ -27,5 +22,5 @@ export async function loginAction(_prev: LoginState, form: FormData): Promise<Lo
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
-  redirect(safeNext(form.get("next")));
+  redirect(safeNextPath(String(form.get("next") ?? "")));
 }

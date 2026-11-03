@@ -33,7 +33,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 npm install
 ```
 
-Copie `.env.example` para `.env.local` e preencha as variáveis. Depois crie as tabelas no banco:
+Copie `.env.example` para `.env.local` e preencha as variáveis. Depois crie as tabelas no banco (o comando lê o `DATABASE_URL` do `.env.local`):
 
 ```bash
 npx drizzle-kit migrate
@@ -60,10 +60,10 @@ npm test
 ## Publicar na Vercel
 
 1. Crie o banco no [Neon](https://neon.tech) e copie a connection string.
-2. Crie as tabelas no Neon, com `DATABASE_URL` apontando para ele:
+2. Crie as tabelas no Neon. O comando lê o `DATABASE_URL` do seu `.env.local`. Para apontar para o Neon só nesse comando, no PowerShell:
 
-   ```bash
-   npx drizzle-kit migrate
+   ```powershell
+   $env:DATABASE_URL="postgresql://usuario:senha@host/banco?sslmode=require"; npx drizzle-kit migrate
    ```
 
 3. Importe o repositório na [Vercel](https://vercel.com) e cadastre as 5 variáveis de ambiente.

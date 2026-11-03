@@ -109,16 +109,15 @@ export async function syncChannel(deps: SyncDeps, channelId: string): Promise<Ch
   const newIds = candidates.filter((id) => !known.has(id));
   const details = await yt.getVideos(newIds);
   const feedCutoff = now.getTime() - FEED_WINDOW_DAYS * 86_400_000;
-  const rows = details.map((d) => {
-    const windowed = firstImport || backfillIds.has(d.id);
-    return {
-      ...videoColumns(d),
-      channelId,
-      shortsCheckFailures: 0,
-      isShort: false,
-      inFeed: windowed ? d.publishedAt.getTime() >= feedCutoff : true,
-    };
-  });
+  // A video first seen more than FEED_WINDOW_DAYS after publication is not "new" (first import, backfill,
+  // a re-added channel or a lives playlist that failed earlier): it goes to the channel page, not the feed.
+  const rows = details.map((d) => ({
+    ...videoColumns(d),
+    channelId,
+    shortsCheckFailures: 0,
+    isShort: false,
+    inFeed: d.publishedAt.getTime() >= feedCutoff,
+  }));
   for (let i = 0; i < rows.length; i += 500) {
     await db.insert(videos).values(rows.slice(i, i + 500)).onConflictDoNothing();
   }

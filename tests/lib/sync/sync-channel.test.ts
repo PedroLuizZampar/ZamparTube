@@ -305,3 +305,43 @@ describe("syncChannel — review 1 fixes", () => {
     expect(await row("l")).toMatchObject({ liveState: "ended", durationSeconds: 3600 });
   });
 });
+
+describe("syncChannel — final review fixes", () => {
+  it("a re-added channel does not flood the feed with videos older than 30 days", async () => {
+    await addChannel({ lastSyncedAt: daysAgo(200) });
+    await db.insert(videos).values({
+      id: "known",
+      channelId: CH,
+      title: "known",
+      publishedAt: daysAgo(200),
+      durationSeconds: 600,
+      thumbnailUrl: "",
+      shortsCheck: "not_needed",
+      liveState: "none",
+      inFeed: false,
+    });
+    const yt = createFakeYouTube({
+      playlists: { [LF]: ["new", "old", "known"], [LV]: [] },
+      videos: { new: vid("new", { publishedAt: daysAgo(2) }), old: vid("old", { publishedAt: daysAgo(90) }) },
+    });
+    await syncChannel(deps(yt), CH);
+    expect((await row("new")).inFeed).toBe(true);
+    expect((await row("old")).inFeed).toBe(false);
+  });
+
+  it("old live recordings found after a failed first-import UULV read stay out of the feed", async () => {
+    await addChannel();
+    const yt = createFakeYouTube({
+      failingPlaylists: [LV],
+      playlists: { [LF]: ["a"], [LV]: ["rec-old"] },
+      videos: {
+        a: vid("a"),
+        "rec-old": vid("rec-old", { durationSeconds: 5400, liveActualEndTime: daysAgo(300), publishedAt: daysAgo(300) }),
+      },
+    });
+    await syncChannel(deps(yt), CH);
+    const healthy = createFakeYouTube({ playlists: yt.playlists, videos: yt.videos });
+    await syncChannel(deps(healthy), CH);
+    expect(await row("rec-old")).toMatchObject({ liveState: "ended", inFeed: false });
+  });
+});

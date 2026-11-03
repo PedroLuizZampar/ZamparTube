@@ -1,0 +1,209 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { createTestDb } from "../../helpers/db";
+import { createFakeYouTube, daysAgo, NOW, vid, type FakeYouTube } from "../../helpers/fake-youtube";
+import { channels, playlistItems, playlists, videos } from "@/lib/db/schema";
+import type { Db } from "@/lib/db/client";
+import { syncChannel, type SyncDeps } from "@/lib/sync/sync-channel";
+import type { ProbeResult } from "@/lib/youtube/shorts-probe";
+
+const CH = "UCaaaaaaaaaaaaaaaaaaaaaa";
+const LF = "UULFaaaaaaaaaaaaaaaaaaaaaa";
+const LV = "UULVaaaaaaaaaaaaaaaaaaaaaa";
+const UU = "UUaaaaaaaaaaaaaaaaaaaaaa";
+
+let db: Db;
+
+async function addChannel(extra: Partial<typeof channels.$inferInsert> = {}) {
+  await db.insert(channels).values({ id: CH, title: "Canal", avatarUrl: "", uploadsPlaylistId: UU, ...extra });
+}
+
+function deps(yt: FakeYouTube, probe: (id: string) => Promise<ProbeResult> = async () => "not_short"): SyncDeps {
+  return { db, yt, probe, now: NOW };
+}
+
+async function row(id: string) {
+  const [r] = await db.select().from(videos).where(eq(videos.id, id));
+  return r;
+}
+
+async function channelRow() {
+  const [r] = await db.select().from(channels).where(eq(channels.id, CH));
+  return r;
+}
+
+beforeEach(async () => {
+  db = await createTestDb();
+});
+
+describe("syncChannel", () => {
+  it("first import: videos older than 30 days get inFeed=false, newer true", async () => {
+    await addChannel();
+    const yt = createFakeYouTube({
+      playlists: { [LF]: ["new", "old"], [LV]: [] },
+      videos: { new: vid("new", { publishedAt: daysAgo(5) }), old: vid("old", { publishedAt: daysAgo(45) }) },
+    });
+    const r = await syncChannel(deps(yt), CH);
+    expect(r.inserted).toBe(2);
+    expect((await row("new")).inFeed).toBe(true);
+    expect((await row("old")).inFeed).toBe(false);
+    expect((await channelRow()).lastSyncedAt).toEqual(NOW);
+  });
+
+  it("incremental: stops paging at the first known id and new videos get inFeed=true", async () => {
+    await addChannel({ lastSyncedAt: daysAgo(1) });
+    const ids = Array.from({ length: 120 }, (_, i) => `v${i}`);
+    const yt = createFakeYouTube({
+      playlists: { [LF]: ["fresh", ...ids], [LV]: [] },
+      videos: Object.fromEntries(
+        ["fresh", ...ids].map((id) => [id, vid(id, { publishedAt: id === "fresh" ? daysAgo(0) : daysAgo(60) })]),
+      ),
+    });
+    await db.insert(videos).values({
+      id: "v0",
+      channelId: CH,
+      title: "known",
+      publishedAt: daysAgo(60),
+      durationSeconds: 600,
+      thumbnailUrl: "",
+      shortsCheck: "not_needed",
+      liveState: "none",
+      inFeed: false,
+    });
+    const r = await syncChannel(deps(yt), CH);
+    const lfCalls = yt.calls.filter((c) => c.method === "listPlaylistPage" && c.playlistId === LF);
+    expect(lfCalls).toHaveLength(1);
+    expect(r.inserted).toBe(49); // fresh + v1..v48 on the first page minus known v0
+    expect((await row("fresh")).inFeed).toBe(true);
+  });
+
+  it("UULF missing → uses UU, flags the channel, and a 60s video stays pending until the probe says not_short", async () => {
+    await addChannel();
+    const yt = createFakeYouTube({
+      missingPlaylists: [LF],
+      playlists: { [UU]: ["short1", "long1"], [LV]: [] },
+      videos: { short1: vid("short1", { durationSeconds: 60 }), long1: vid("long1") },
+    });
+    let answer: ProbeResult = "unknown";
+    await syncChannel(deps(yt, async () => answer), CH);
+    expect((await channelRow()).longPlaylistMissing).toBe(true);
+    expect(await row("long1")).toMatchObject({ shortsCheck: "not_needed", isShort: false });
+    expect(await row("short1")).toMatchObject({ shortsCheck: "pending", shortsCheckFailures: 1 });
+
+    answer = "not_short";
+    await syncChannel(deps(yt, async () => answer), CH);
+    expect(await row("short1")).toMatchObject({ shortsCheck: "ok", isShort: false });
+    const ufCalls = yt.calls.filter((c) => c.method === "listPlaylistPage" && c.playlistId === LF);
+    expect(ufCalls).toHaveLength(1); // second sync goes straight to UU
+  });
+
+  it("probe 'short' → isShort true and shortsCheck short", async () => {
+    await addChannel();
+    const yt = createFakeYouTube({
+      playlists: { [LF]: ["s"], [LV]: [] },
+      videos: { s: vid("s", { durationSeconds: 45 }) },
+    });
+    await syncChannel(deps(yt, async () => "short"), CH);
+    expect(await row("s")).toMatchObject({ isShort: true, shortsCheck: "short" });
+  });
+
+  it("UULV missing → no error, long videos still synced", async () => {
+    await addChannel();
+    const yt = createFakeYouTube({ missingPlaylists: [LV], playlists: { [LF]: ["a"] }, videos: { a: vid("a") } });
+    const r = await syncChannel(deps(yt), CH);
+    expect(r.inserted).toBe(1);
+  });
+
+  it("UULV generic error → ignored, long videos still synced", async () => {
+    await addChannel();
+    const yt = createFakeYouTube({
+      failingPlaylists: [LV],
+      playlists: { [LF]: ["a"], [LV]: [] },
+      videos: { a: vid("a") },
+    });
+    const r = await syncChannel(deps(yt), CH);
+    expect(r.inserted).toBe(1);
+  });
+
+  it("imports ended live recordings and keeps upcoming lives pending", async () => {
+    await addChannel();
+    const yt = createFakeYouTube({
+      playlists: { [LF]: [], [LV]: ["rec", "up"] },
+      videos: {
+        rec: vid("rec", { durationSeconds: 5400, liveActualEndTime: daysAgo(2) }),
+        up: vid("up", { durationSeconds: 0, liveBroadcastContent: "upcoming" }),
+      },
+    });
+    await syncChannel(deps(yt), CH);
+    expect(await row("rec")).toMatchObject({ liveState: "ended", isLiveRecording: true, inFeed: true });
+    expect(await row("up")).toMatchObject({ liveState: "pending" });
+  });
+
+  it("a pending live becomes ended on a later sync and stays in the feed", async () => {
+    await addChannel({ lastSyncedAt: daysAgo(1) });
+    const yt = createFakeYouTube({
+      playlists: { [LF]: [], [LV]: ["l"] },
+      videos: { l: vid("l", { durationSeconds: 0, liveBroadcastContent: "live" }) },
+    });
+    await syncChannel(deps(yt), CH);
+    expect(await row("l")).toMatchObject({ liveState: "pending", inFeed: true });
+
+    yt.videos.l = vid("l", { durationSeconds: 7200, liveActualEndTime: NOW });
+    await syncChannel(deps(yt), CH);
+    expect(await row("l")).toMatchObject({
+      liveState: "ended",
+      isLiveRecording: true,
+      durationSeconds: 7200,
+      shortsCheck: "not_needed",
+      inFeed: true,
+    });
+  });
+
+  it("a pending video missing from videos.list is deleted and removed from playlists", async () => {
+    await addChannel({ lastSyncedAt: daysAgo(1) });
+    const yt = createFakeYouTube({
+      playlists: { [LF]: [], [LV]: ["gone"] },
+      videos: { gone: vid("gone", { liveBroadcastContent: "upcoming", durationSeconds: 0 }) },
+    });
+    await syncChannel(deps(yt), CH);
+    const [wl] = await db.select().from(playlists);
+    await db.insert(playlistItems).values({ playlistId: wl.id, videoId: "gone", position: 0 });
+
+    delete yt.videos.gone;
+    const r = await syncChannel(deps(yt), CH);
+    expect(r.removed).toBe(1);
+    expect(await row("gone")).toBeUndefined();
+    expect(await db.select().from(playlistItems)).toHaveLength(0);
+  });
+
+  it("first import of a 2500-video channel backfills over several runs", async () => {
+    await addChannel();
+    const ids = Array.from({ length: 2500 }, (_, i) => `b${i}`);
+    const yt = createFakeYouTube({
+      playlists: { [LF]: ids, [LV]: [] },
+      videos: Object.fromEntries(ids.map((id, i) => [id, vid(id, { publishedAt: daysAgo(i < 10 ? 1 : 100) })])),
+    });
+
+    const r1 = await syncChannel(deps(yt), CH);
+    expect(r1).toMatchObject({ inserted: 1000, backfillDone: false });
+    expect((await channelRow()).backfillPageToken).not.toBeNull();
+
+    const r2 = await syncChannel(deps(yt), CH);
+    expect(r2).toMatchObject({ inserted: 1000, backfillDone: false });
+
+    const r3 = await syncChannel(deps(yt), CH);
+    expect(r3).toMatchObject({ inserted: 500, backfillDone: true });
+    expect((await channelRow()).backfillPageToken).toBeNull();
+
+    expect((await row("b5")).inFeed).toBe(true);
+    expect((await row("b2400")).inFeed).toBe(false);
+    expect((await row("b1500")).inFeed).toBe(false);
+  });
+
+  it("throws for a removed channel", async () => {
+    await addChannel({ removedAt: daysAgo(1) });
+    await expect(syncChannel(deps(createFakeYouTube()), CH)).rejects.toThrow();
+  });
+
+  it.todo("a short never appears in listFeed, searchVideos or listChannelVideos (enabled in Task 6)");
+});

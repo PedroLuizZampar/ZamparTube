@@ -40,10 +40,10 @@ describe("schema", () => {
     const r = await db.execute(
       sql`select id from videos where search_vector @@ websearch_to_tsquery('portuguese', 'programação')`,
     );
-    expect(r.rows).toHaveLength(1);
+    expect((r as { rows: unknown[] }).rows).toHaveLength(1);
     const r2 = await db.execute(
       sql`select id from videos where search_vector @@ websearch_to_tsquery('portuguese', 'programar')`,
     );
-    expect(r2.rows).toHaveLength(1);
+    expect((r2 as { rows: unknown[] }).rows).toHaveLength(1);
   });
 });

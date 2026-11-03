@@ -6,6 +6,7 @@ import { channels, playlistItems, playlists, videos } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/client";
 import { syncChannel, type SyncDeps } from "@/lib/sync/sync-channel";
 import type { ProbeResult } from "@/lib/youtube/shorts-probe";
+import { getVisibleVideo, listChannelVideos, listFeed, searchVideos } from "@/lib/queries/videos";
 
 const CH = "UCaaaaaaaaaaaaaaaaaaaaaa";
 const LF = "UULFaaaaaaaaaaaaaaaaaaaaaa";
@@ -205,5 +206,26 @@ describe("syncChannel", () => {
     await expect(syncChannel(deps(createFakeYouTube()), CH)).rejects.toThrow();
   });
 
-  it.todo("a short never appears in listFeed, searchVideos or listChannelVideos (enabled in Task 6)");
+  it("a short (or an unverified short-length video) never appears in listFeed, searchVideos or listChannelVideos", async () => {
+    await addChannel();
+    const yt = createFakeYouTube({
+      missingPlaylists: [LF], // fallback: UU includes Shorts
+      playlists: { [UU]: ["short", "unverified", "long"], [LV]: [] },
+      videos: {
+        short: vid("short", { durationSeconds: 40, title: "programação curta" }),
+        unverified: vid("unverified", { durationSeconds: 90, title: "programação talvez" }),
+        long: vid("long", { title: "programação longa" }),
+      },
+    });
+    await syncChannel(deps(yt, async (id) => (id === "short" ? "short" : "unknown")), CH);
+
+    const seen = [
+      ...(await listFeed(db, { limit: 50 })).items,
+      ...(await searchVideos(db, "programação", { limit: 50 })).items,
+      ...(await listChannelVideos(db, CH, { limit: 50 })).items,
+    ].map((v) => v.id);
+    expect(new Set(seen)).toEqual(new Set(["long"]));
+    expect(await getVisibleVideo(db, "short")).toBeNull();
+    expect(await getVisibleVideo(db, "unverified")).toBeNull();
+  });
 });

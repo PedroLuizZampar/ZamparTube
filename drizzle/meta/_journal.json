@@ -15,6 +15,13 @@
       "when": 1793729454614,
       "tag": "0001_seed_watch_later",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793734337967,
+      "tag": "0002_channel_avatar",
+      "breakpoints": true
     }
   ]
 }

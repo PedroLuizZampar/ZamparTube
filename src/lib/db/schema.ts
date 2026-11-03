@@ -40,6 +40,10 @@ export const channels = pgTable("channels", {
   removedAt: timestamp("removed_at", { withTimezone: true }),
   backfillPageToken: text("backfill_page_token"),
   longPlaylistMissing: boolean("long_playlist_missing").notNull().default(false),
+  /** Avatar image stored as base64 and served by /avatar/[id], so browsers never hit Google (which rate-limits). */
+  avatarData: text("avatar_data"),
+  avatarContentType: text("avatar_content_type"),
+  avatarFetchedAt: timestamp("avatar_fetched_at", { withTimezone: true }),
 });
 
 export const videos = pgTable(

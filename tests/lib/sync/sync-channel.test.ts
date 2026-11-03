@@ -345,3 +345,30 @@ describe("syncChannel — final review fixes", () => {
     expect(await row("rec-old")).toMatchObject({ liveState: "ended", inFeed: false });
   });
 });
+
+describe("syncChannel — channel avatar", () => {
+  const img = { base64: "AQID", contentType: "image/jpeg" };
+  const emptyYt = () => createFakeYouTube({ playlists: { [LF]: [], [LV]: [] } });
+
+  it("downloads and stores the avatar when missing", async () => {
+    await addChannel({ avatarUrl: "https://yt3.ggpht.com/a" });
+    const asked: string[] = [];
+    await syncChannel({ ...deps(emptyYt()), fetchImage: async (u) => (asked.push(u), img) }, CH);
+    expect(asked).toEqual(["https://yt3.ggpht.com/a"]);
+    expect(await channelRow()).toMatchObject({ avatarData: "AQID", avatarContentType: "image/jpeg", avatarFetchedAt: NOW });
+  });
+
+  it("does not download again within 7 days", async () => {
+    await addChannel({ avatarUrl: "u", avatarData: "AQID", avatarContentType: "image/jpeg", avatarFetchedAt: daysAgo(3) });
+    let calls = 0;
+    await syncChannel({ ...deps(emptyYt()), fetchImage: async () => (calls++, img) }, CH);
+    expect(calls).toBe(0);
+  });
+
+  it("keeps going without an avatar when the download fails", async () => {
+    await addChannel({ avatarUrl: "u" });
+    const r = await syncChannel({ ...deps(emptyYt()), fetchImage: async () => null }, CH);
+    expect(r.channelId).toBe(CH);
+    expect((await channelRow()).avatarData).toBeNull();
+  });
+});

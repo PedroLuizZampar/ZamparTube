@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, not, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import { channels, videos, watchState } from "@/lib/db/schema";
+import { avatarSrcSql } from "./avatar";
 import { visibleVideoCondition } from "./visibility";
 
 export interface VideoCardData {
@@ -8,7 +9,7 @@ export interface VideoCardData {
   title: string;
   channelId: string;
   channelTitle: string;
-  channelAvatarUrl: string;
+  channelAvatarSrc: string;
   publishedAt: Date;
   durationSeconds: number;
   thumbnailUrl: string;
@@ -28,7 +29,7 @@ export const cardFields = {
   title: videos.title,
   channelId: videos.channelId,
   channelTitle: channels.title,
-  channelAvatarUrl: channels.avatarUrl,
+  channelAvatarSrc: avatarSrcSql,
   publishedAt: videos.publishedAt,
   durationSeconds: videos.durationSeconds,
   thumbnailUrl: videos.thumbnailUrl,

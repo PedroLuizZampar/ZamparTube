@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Check, EyeOff, Radio } from "lucide-react";
 import { dismissAction } from "@/app/(app)/actions";
 import { formatDuration, formatRelative } from "@/lib/format";
+import { ChannelAvatar } from "./ChannelAvatar";
 import type { VideoCardData } from "@/lib/queries/videos";
 
 interface Props {
@@ -68,18 +69,7 @@ export function VideoCard({ video, onFeed = false, watchQuery = "", hideChannel 
       <div className="flex gap-3">
         {!hideChannel && (
           <Link href={`/channel/${video.channelId}`} className="shrink-0" aria-label={video.channelTitle}>
-            {video.channelAvatarUrl ? (
-              <Image
-                src={video.channelAvatarUrl}
-                alt=""
-                width={36}
-                height={36}
-                unoptimized
-                className="h-9 w-9 rounded-full bg-surface-2"
-              />
-            ) : (
-              <span className="block h-9 w-9 rounded-full bg-surface-2" />
-            )}
+            <ChannelAvatar src={video.channelAvatarSrc} name={video.channelTitle} size={36} />
           </Link>
         )}
         <div className="min-w-0 flex-1">

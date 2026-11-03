@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { getDb } from "@/lib/db/client";
 import { formatRelative } from "@/lib/format";
 import { listCategories, listChannels } from "@/lib/queries/channels";
+import { ChannelAvatar } from "@/components/ChannelAvatar";
 import { AddChannelForm, CategoryRow, ChannelControls, CreateCategoryForm } from "./ChannelForms";
 
 export const metadata: Metadata = { title: "Canais · ZamparTube" };
@@ -34,11 +34,7 @@ export default async function ChannelsPage() {
             {channels.map((c) => (
               <li key={c.id} className="flex items-center gap-3 py-3">
                 <Link href={`/channel/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                  {c.avatarUrl ? (
-                    <Image src={c.avatarUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 shrink-0 rounded-full" />
-                  ) : (
-                    <span className="h-10 w-10 shrink-0 rounded-full bg-surface-2" />
-                  )}
+                  <ChannelAvatar src={c.avatarSrc} name={c.title} size={40} />
                   <span className="min-w-0">
                     <span className="block truncate font-medium hover:text-white">{c.title}</span>
                     <span className="block truncate text-sm text-muted">

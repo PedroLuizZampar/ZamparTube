@@ -10,6 +10,7 @@ import type { Db } from "@/lib/db/client";
 import { channels, playlistItems, videos, watchState } from "@/lib/db/schema";
 import { isPlaylistNotFound, isQuotaExceeded, type VideoDetails, type YouTubeClient } from "@/lib/youtube/client";
 import { livesPlaylistId, longVideosPlaylistId, uploadsPlaylistId } from "@/lib/youtube/parse";
+import type { StoredImage } from "@/lib/youtube/avatar";
 import type { ProbeResult } from "@/lib/youtube/shorts-probe";
 import { applyProbeResult, classifyVideo } from "./classify";
 
@@ -18,7 +19,11 @@ export interface SyncDeps {
   yt: YouTubeClient;
   probe: (id: string) => Promise<ProbeResult>;
   now: Date;
+  /** Downloads the channel avatar so the app can serve it itself (optional in tests). */
+  fetchImage?: (url: string) => Promise<StoredImage | null>;
 }
+
+const AVATAR_REFRESH_MS = 7 * 86_400_000;
 
 export interface ChannelSyncResult {
   channelId: string;
@@ -188,10 +193,18 @@ export async function syncChannel(deps: SyncDeps, channelId: string): Promise<Ch
     });
   }
 
-  // 7. Done.
+  // 7. Avatar: stored once a week; a failed download just retries on the next sync.
+  let avatar: { avatarData: string; avatarContentType: string; avatarFetchedAt: Date } | object = {};
+  const avatarStale = !ch.avatarFetchedAt || now.getTime() - ch.avatarFetchedAt.getTime() > AVATAR_REFRESH_MS;
+  if (deps.fetchImage && avatarStale) {
+    const img = await deps.fetchImage(ch.avatarUrl);
+    if (img) avatar = { avatarData: img.base64, avatarContentType: img.contentType, avatarFetchedAt: now };
+  }
+
+  // 8. Done.
   await db
     .update(channels)
-    .set({ lastSyncedAt: now, backfillPageToken, longPlaylistMissing })
+    .set({ lastSyncedAt: now, backfillPageToken, longPlaylistMissing, ...avatar })
     .where(eq(channels.id, channelId));
 
   return { channelId, inserted: rows.length, removed, backfillDone: backfillPageToken === null };

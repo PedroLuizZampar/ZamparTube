@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db/client";
 import { channels } from "@/lib/db/schema";
 import { getEnv } from "@/lib/env";
 import { createYouTubeClient, isQuotaExceeded } from "@/lib/youtube/client";
+import { fetchAvatarImage } from "@/lib/youtube/avatar";
 import { probeShort } from "@/lib/youtube/shorts-probe";
 import { syncChannel, type SyncDeps } from "./sync-channel";
 
@@ -12,6 +13,7 @@ export function createSyncDeps(): SyncDeps {
     db: getDb(),
     yt: createYouTubeClient(getEnv().YOUTUBE_API_KEY),
     probe: (id) => probeShort(id),
+    fetchImage: (url) => fetchAvatarImage(url),
     now: new Date(),
   };
 }

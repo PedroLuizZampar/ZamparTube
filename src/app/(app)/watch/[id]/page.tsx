@@ -10,6 +10,7 @@ import { formatRelative } from "@/lib/format";
 import { resumeFrom } from "@/lib/player/progress";
 import { getNextInPlaylist, listPlaylists, playlistsContaining } from "@/lib/queries/playlists";
 import { getVisibleVideo } from "@/lib/queries/videos";
+import { ChannelAvatar } from "@/components/ChannelAvatar";
 import { Description, WatchedToggle } from "./WatchControls";
 
 export async function generateMetadata({ params }: PageProps<"/watch/[id]">): Promise<Metadata> {
@@ -59,11 +60,7 @@ export default async function WatchPage({ params, searchParams }: PageProps<"/wa
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
         <Link href={`/channel/${video.channelId}`} className="flex items-center gap-3">
-          {video.channelAvatarUrl ? (
-            <Image src={video.channelAvatarUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 rounded-full" />
-          ) : (
-            <span className="h-10 w-10 rounded-full bg-surface-2" />
-          )}
+          <ChannelAvatar src={video.channelAvatarSrc} name={video.channelTitle} size={40} />
           <span>
             <span className="block font-medium hover:text-white">{video.channelTitle}</span>
             <time dateTime={video.publishedAt.toISOString()} className="block text-sm text-muted">

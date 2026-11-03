@@ -68,7 +68,7 @@ describe("listFeed", () => {
       title: "Título",
       channelId: CH_A,
       channelTitle: "Canal a",
-      channelAvatarUrl: "a.jpg",
+      channelAvatarSrc: "",
       durationSeconds: 900,
       thumbnailUrl: "t-v.jpg",
       embeddable: true,
@@ -132,5 +132,17 @@ describe("getVisibleVideo", () => {
     await insertVideo(db, "r", { channelId: CH_B });
     await db.update(channels).set({ removedAt: NOW }).where(eq(channels.id, CH_B));
     expect(await getVisibleVideo(db, "r")).not.toBeNull();
+  });
+});
+
+describe("channel avatar source", () => {
+  it("points to the app's own /avatar route, versioned by fetch time, once the image is stored", async () => {
+    await db
+      .update(channels)
+      .set({ avatarData: "AQID", avatarContentType: "image/jpeg", avatarFetchedAt: new Date("2026-11-01T00:00:00Z") })
+      .where(eq(channels.id, CH_A));
+    await insertVideo(db, "v");
+    const [card] = (await listFeed(db, { limit: 1 })).items;
+    expect(card.channelAvatarSrc).toBe(`/avatar/${CH_A}?v=1793491200`);
   });
 });

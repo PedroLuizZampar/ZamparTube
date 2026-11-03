@@ -3,12 +3,15 @@ import type { Db } from "@/lib/db/client";
 import { categories, channels } from "@/lib/db/schema";
 import type { ChannelInfo } from "@/lib/youtube/client";
 import { uploadsPlaylistId } from "@/lib/youtube/parse";
+import { avatarSrcSql } from "./avatar";
 
 export interface ChannelListItem {
   id: string;
   title: string;
   handle: string | null;
   avatarUrl: string;
+  /** Local URL of the stored avatar, or "" when not downloaded yet. */
+  avatarSrc: string;
   categoryId: number | null;
   lastSyncedAt: Date | null;
 }
@@ -21,6 +24,7 @@ export async function listChannels(db: Db): Promise<ChannelListItem[]> {
       title: channels.title,
       handle: channels.handle,
       avatarUrl: channels.avatarUrl,
+      avatarSrc: avatarSrcSql,
       categoryId: channels.categoryId,
       lastSyncedAt: channels.lastSyncedAt,
     })
@@ -36,6 +40,7 @@ export async function getChannel(db: Db, id: string): Promise<ChannelListItem | 
       title: channels.title,
       handle: channels.handle,
       avatarUrl: channels.avatarUrl,
+      avatarSrc: avatarSrcSql,
       categoryId: channels.categoryId,
       lastSyncedAt: channels.lastSyncedAt,
     })

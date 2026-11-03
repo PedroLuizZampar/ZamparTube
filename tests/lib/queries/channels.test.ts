@@ -83,3 +83,15 @@ describe("categories", () => {
     expect((await listChannels(db))[0].categoryId).toBeNull();
   });
 });
+
+describe("channel list avatar source", () => {
+  it("is empty until the avatar is stored, then the local route", async () => {
+    await insertChannel(db, CH_A);
+    expect((await listChannels(db))[0].avatarSrc).toBe("");
+    await db
+      .update(channels)
+      .set({ avatarData: "AQID", avatarContentType: "image/png", avatarFetchedAt: new Date("2026-11-01T00:00:00Z") })
+      .where(eq(channels.id, CH_A));
+    expect((await listChannels(db))[0].avatarSrc).toBe(`/avatar/${CH_A}?v=1793491200`);
+  });
+});

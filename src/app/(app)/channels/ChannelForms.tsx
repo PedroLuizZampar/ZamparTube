@@ -1,25 +1,10 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
-import { Check, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useActionState, useOptimistic, useState, useTransition } from "react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+import { CategoryTags, type CategoryOption } from "@/components/CategoryTags";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Select, type SelectOption } from "@/components/ui/Select";
-import {
-  addChannelAction,
-  createCategoryAction,
-  deleteCategoryAction,
-  removeChannelAction,
-  renameCategoryAction,
-  setChannelCategoryAction,
-  type ActionState,
-} from "./actions";
-
-type Category = { id: number; name: string };
-
-const categoryOptions = (categories: Category[]): SelectOption[] => [
-  { value: "", label: "Sem categoria" },
-  ...categories.map((c) => ({ value: String(c.id), label: c.name })),
-];
+import { addChannelAction, removeChannelAction, setChannelCategoryAction, type ActionState } from "./actions";
 
 const input =
   "rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted/80 outline-none focus:border-accent";
@@ -27,8 +12,10 @@ const primary =
   "flex items-center justify-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-60";
 const ghostIcon = "rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text disabled:opacity-50";
 
-export function AddChannelForm({ categories }: { categories: Category[] }) {
+export function AddChannelForm({ categories }: { categories: CategoryOption[] }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(addChannelAction, { ok: true, message: "" });
+  // Kept between submissions, so several channels can be added to the same categories in a row.
+  const [categoryIds, setCategoryIds] = useState<number[]>([]);
   return (
     <form action={action} className="flex flex-col gap-3">
       <div className="flex flex-col gap-2 sm:flex-row">
@@ -43,14 +30,20 @@ export function AddChannelForm({ categories }: { categories: Category[] }) {
           className={`${input} flex-1`}
           autoComplete="off"
         />
-        {categories.length > 0 && (
-          <Select name="categoryId" ariaLabel="Categoria" options={categoryOptions(categories)} className="sm:w-44" />
-        )}
         <button type="submit" disabled={pending} className={primary}>
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" strokeWidth={2.5} />}
           {pending ? "Importando vídeos…" : "Adicionar"}
         </button>
       </div>
+      <input type="hidden" name="categoryIds" value={categoryIds.join(",")} />
+      <CategoryTags
+        label="o novo canal"
+        categories={categories}
+        selected={categoryIds}
+        onToggle={(id, on) =>
+          setCategoryIds((ids) => (on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id)))
+        }
+      />
       {state.message && (
         <p role="status" className={`text-sm ${state.ok ? "text-accent" : "text-danger"}`}>
           {state.message}
@@ -60,134 +53,53 @@ export function AddChannelForm({ categories }: { categories: Category[] }) {
   );
 }
 
-export function ChannelControls({
+/** A channel's category tags; each change is saved right away. */
+export function ChannelCategoryTags({
   channelId,
   title,
-  categoryId,
+  categoryIds,
   categories,
 }: {
   channelId: string;
   title: string;
-  categoryId: number | null;
-  categories: Category[];
+  categoryIds: number[];
+  categories: CategoryOption[];
 }) {
-  const [pending, start] = useTransition();
+  const [selected, setSelected] = useOptimistic(categoryIds);
+  const [, start] = useTransition();
   return (
-    <div className="flex items-center gap-1">
-      {categories.length > 0 && (
-        <Select
-          ariaLabel={`Categoria de ${title}`}
-          defaultValue={categoryId ? String(categoryId) : ""}
-          disabled={pending}
-          onValueChange={(v) => start(() => setChannelCategoryAction(channelId, v ? Number(v) : null))}
-          options={categoryOptions(categories)}
-          className="w-40 py-1.5"
-        />
-      )}
-      <ConfirmDialog
-        title={`Remover "${title}"?`}
-        description="Os vídeos dele saem do feed e da busca, mas continuam nas suas playlists."
-        confirmLabel="Remover canal"
-        destructive
-        onConfirm={() => start(() => removeChannelAction(channelId))}
-        trigger={
-          <button type="button" disabled={pending} className={ghostIcon} title="Remover canal" aria-label={`Remover ${title}`}>
-            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-        }
-      />
-    </div>
+    <CategoryTags
+      label={title}
+      categories={categories}
+      selected={selected}
+      onToggle={(id, on) =>
+        start(async () => {
+          setSelected(on ? [...selected, id] : selected.filter((x) => x !== id));
+          try {
+            await setChannelCategoryAction(channelId, id, on);
+          } catch {
+            // The optimistic tag reverts on its own; nothing else to undo.
+          }
+        })
+      }
+    />
   );
 }
 
-export function CreateCategoryForm() {
-  const [state, action, pending] = useActionState<ActionState, FormData>(createCategoryAction, {
-    ok: true,
-    message: "",
-  });
+export function RemoveChannelButton({ channelId, title }: { channelId: string; title: string }) {
+  const [pending, start] = useTransition();
   return (
-    <form action={action} className="flex flex-col gap-2">
-      <div className="flex gap-2">
-        <label htmlFor="new-category" className="sr-only">
-          Nova categoria
-        </label>
-        <input id="new-category" name="name" required maxLength={60} placeholder="Nova categoria" className={`${input} flex-1`} />
-        <button type="submit" disabled={pending} className={primary}>
-          Criar
+    <ConfirmDialog
+      title={`Remover "${title}"?`}
+      description="Os vídeos dele saem do feed e da busca, mas continuam nas suas playlists."
+      confirmLabel="Remover canal"
+      destructive
+      onConfirm={() => start(() => removeChannelAction(channelId))}
+      trigger={
+        <button type="button" disabled={pending} className={ghostIcon} title="Remover canal" aria-label={`Remover ${title}`}>
+          <Trash2 className="h-4 w-4" strokeWidth={1.75} />
         </button>
-      </div>
-      {!state.ok && <p className="text-sm text-danger">{state.message}</p>}
-    </form>
-  );
-}
-
-export function CategoryRow({ category }: { category: Category }) {
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(category.name);
-  const [error, setError] = useState("");
-  const [pending, start] = useTransition();
-
-  if (editing) {
-    return (
-      <li className="flex flex-col gap-1 py-2">
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            start(async () => {
-              const r = await renameCategoryAction(category.id, name);
-              if (r.ok) setEditing(false);
-              else setError(r.message);
-            });
-          }}
-        >
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-label="Nome da categoria"
-            maxLength={60}
-            autoFocus
-            className={`${input} flex-1`}
-          />
-          <button type="submit" disabled={pending} className={ghostIcon} aria-label="Salvar">
-            <Check className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className={ghostIcon}
-            aria-label="Cancelar"
-            onClick={() => {
-              setName(category.name);
-              setError("");
-              setEditing(false);
-            }}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </form>
-        {error && <p className="text-sm text-danger">{error}</p>}
-      </li>
-    );
-  }
-
-  return (
-    <li className="flex items-center gap-2 py-2">
-      <span className="flex-1 truncate">{category.name}</span>
-      <button type="button" className={ghostIcon} aria-label={`Renomear ${category.name}`} onClick={() => setEditing(true)}>
-        <Pencil className="h-4 w-4" strokeWidth={1.75} />
-      </button>
-      <ConfirmDialog
-        title={`Apagar a categoria "${category.name}"?`}
-        description="Os canais dela continuam no app, só ficam sem categoria."
-        confirmLabel="Apagar categoria"
-        destructive
-        onConfirm={() => start(() => deleteCategoryAction(category.id))}
-        trigger={
-          <button type="button" disabled={pending} className={ghostIcon} aria-label={`Apagar ${category.name}`}>
-            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-        }
-      />
-    </li>
+      }
+    />
   );
 }

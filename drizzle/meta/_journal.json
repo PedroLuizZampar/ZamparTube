@@ -22,6 +22,34 @@
       "when": 1793734337967,
       "tag": "0002_channel_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795183530836,
+      "tag": "0003_playlist_unique_names",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795185593770,
+      "tag": "0004_images_category_names",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795187955187,
+      "tag": "0005_channel_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795535044215,
+      "tag": "0006_queue",
+      "breakpoints": true
     }
   ]
 }

@@ -1,34 +1,32 @@
-import Link from "next/link";
-import { Logo } from "@/components/Logo";
-import { BottomNav, SideNav } from "@/components/Nav";
-import { SyncButton } from "@/components/SyncButton";
+import { cookies } from "next/headers";
+import { AppShell } from "@/components/AppShell";
+import { PlayerHost } from "@/components/player/NowPlaying";
+import { WatchLaterNameProvider } from "@/components/WatchLaterName";
+import { getDb } from "@/lib/db/client";
+import { readWatchLaterName } from "@/lib/queries/playlists";
+import { queueCount } from "@/lib/queries/queue";
+import { SIDEBAR_COOKIE } from "@/lib/ui-prefs";
 
 // Every page reads the database; nothing here can be prerendered at build time.
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export default function AppLayout({ children }: LayoutProps<"/">) {
+export default async function AppLayout({ children }: LayoutProps<"/">) {
+  // error.tsx cannot catch a failure in this layout: never let the label lookup take every page down.
+  const db = getDb();
+  const [watchLaterName, queued] = await Promise.all([
+    readWatchLaterName(db).catch(() => "Assistir depois"),
+    queueCount(db).catch(() => 0),
+  ]);
+  const sidebarCollapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
   return (
-    <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-border bg-bg px-3 py-5 md:flex">
-        <Link href="/" className="mb-8 px-3">
-          <Logo />
-        </Link>
-        <SideNav />
-        <div className="mt-auto">
-          <SyncButton />
-        </div>
-      </aside>
-
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg/95 px-4 py-3 backdrop-blur md:hidden">
-        <Link href="/">
-          <Logo />
-        </Link>
-        <SyncButton compact />
-      </header>
-
-      <main className="px-4 pb-28 pt-6 md:pb-12 md:pl-[calc(15rem+2rem)] md:pr-8 md:pt-8">{children}</main>
-      <BottomNav />
-    </div>
+    <WatchLaterNameProvider name={watchLaterName}>
+      {/* The player outlives every page: big on a watch page, mini elsewhere. */}
+      <PlayerHost>
+        <AppShell queueCount={queued} initialCollapsed={sidebarCollapsed}>
+          {children}
+        </AppShell>
+      </PlayerHost>
+    </WatchLaterNameProvider>
   );
 }

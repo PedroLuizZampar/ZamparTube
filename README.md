@@ -2,12 +2,14 @@
 
 Um "YouTube pessoal": só vídeos dos canais que você escolher, **sem Shorts**, sem recomendações e com um feed que termina ("Você está em dia").
 
-- Feed com os vídeos novos dos seus canais, com filtro por categoria e opção de dispensar vídeos
-- Player oficial do YouTube, que retoma de onde você parou e marca o vídeo como assistido aos 90%
+- Feed com os vídeos das últimas 2 semanas dos seus canais, com filtros (várias categorias e vários canais) e opção de dispensar vídeos
+- Reprodutor com controles próprios (o YouTube só desenha o vídeo): atalhos de teclado, velocidade, toque duplo para pular 10 s; retoma de onde você parou e marca como assistido aos 90%
 - Tela final própria, no lugar das sugestões do YouTube
-- Playlists pessoais e "Assistir depois"
-- Busca nos vídeos já salvos, que não gasta cota da API
-- Gravações de lives (lives ao vivo e agendadas ficam de fora)
+- Playlists pessoais e "Assistir depois" (renomeável), com imagem de capa; dá para salvar direto do card (no celular, pelo botão ⋮)
+- Categorias com imagem; cada canal pode estar em várias categorias
+- Histórico com "Continuar assistindo" e os vídeos já assistidos
+- Busca na tela inicial, nos vídeos já salvos (inclusive os antigos), sem gastar cota da API
+- Sem lives: ao vivo, agendadas e gravações de live ficam de fora
 - Atualização automática diária, mais o botão "Atualizar agora"
 - Pode ser instalado na tela inicial do celular (PWA)
 

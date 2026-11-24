@@ -3,6 +3,7 @@
 import { useState } from "react";
 import * as RS from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { menuItemClass, menuSurfaceClass, menuTriggerClass } from "./menu-styles";
 
 export interface SelectOption {
   value: string;
@@ -47,7 +48,7 @@ export function Select({ options, value, defaultValue = "", onValueChange, name,
     >
       <RS.Trigger
         aria-label={ariaLabel}
-        className={`inline-flex min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text outline-none transition-colors hover:border-muted/50 focus-visible:border-accent disabled:opacity-60 data-[state=open]:border-accent ${className}`}
+        className={`${menuTriggerClass} ${className}`}
       >
         <span className="truncate">
           <RS.Value />
@@ -62,7 +63,7 @@ export function Select({ options, value, defaultValue = "", onValueChange, name,
         <RS.Content
           position="popper"
           sideOffset={6}
-          className="z-50 max-h-[min(var(--radix-select-content-available-height),18rem)] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-border bg-surface-2 text-sm text-text shadow-[0_12px_32px_rgba(0,0,0,0.45)] data-[state=open]:animate-[select-in_140ms_ease-out]"
+          className={`${menuSurfaceClass} max-h-[min(var(--radix-select-content-available-height),18rem)] min-w-[var(--radix-select-trigger-width)] overflow-hidden`}
         >
           <RS.ScrollUpButton className="flex h-6 items-center justify-center text-muted">
             <ChevronUp className="h-4 w-4" />
@@ -72,7 +73,7 @@ export function Select({ options, value, defaultValue = "", onValueChange, name,
               <RS.Item
                 key={o.value || NONE}
                 value={toRadix(o.value)}
-                className="relative flex cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-3 outline-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent/15 data-[highlighted]:text-text"
+                className={`${menuItemClass} pl-8`}
               >
                 <RS.ItemIndicator className="absolute left-2.5 inline-flex">
                   <Check className="h-4 w-4 text-accent" strokeWidth={2.5} />

@@ -3,7 +3,7 @@
 import { requireSession } from "@/lib/auth/require";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
-import { dismissFromFeed, saveProgress, setWatched } from "@/lib/queries/watch";
+import { clearWatchState, dismissFromFeed, saveProgress, setWatched } from "@/lib/queries/watch";
 import { syncMessage } from "@/lib/sync/messages";
 import { createSyncDeps, runSync } from "@/lib/sync/run-sync";
 
@@ -23,6 +23,12 @@ export async function dismissAction(videoId: string): Promise<void> {
   await requireSession();
   await dismissFromFeed(getDb(), videoId);
   revalidatePath("/");
+}
+
+export async function removeFromHistoryAction(videoId: string): Promise<void> {
+  await requireSession();
+  await clearWatchState(getDb(), videoId);
+  revalidatePath("/", "layout");
 }
 
 export async function setWatchedAction(videoId: string, watched: boolean): Promise<void> {

@@ -220,7 +220,7 @@ describe("syncChannel", () => {
     await syncChannel(deps(yt, async (id) => (id === "short" ? "short" : "unknown")), CH);
 
     const seen = [
-      ...(await listFeed(db, { limit: 50 })).items,
+      ...(await listFeed(db, { now: NOW, limit: 50 })).items,
       ...(await searchVideos(db, "programação", { limit: 50 })).items,
       ...(await listChannelVideos(db, CH, { limit: 50 })).items,
     ].map((v) => v.id);

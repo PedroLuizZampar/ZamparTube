@@ -4,8 +4,8 @@ export const SHORTS_MAX_SECONDS = 180;
 export const MAX_PROBE_FAILURES = 5;
 /** Set to false to skip the probe entirely: every video <= SHORTS_MAX_SECONDS stays hidden. */
 export const SHORTS_PROBE_ENABLED = true;
-/** On a channel's first import, only videos published in this window enter the feed. */
-export const FEED_WINDOW_DAYS = 30;
+/** The feed only shows videos published in this window (also: on first import, only these enter the feed). */
+export const FEED_WINDOW_DAYS = 14;
 /** Fraction of the duration after which a video counts as watched. */
 export const WATCHED_RATIO = 0.9;
 /** How often the player saves the playback position while playing. */

@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ExternalLink, SkipForward } from "lucide-react";
 import { AddToPlaylistMenu, WatchLaterButton } from "@/components/AddToPlaylistMenu";
-import { Player } from "@/components/Player";
+import { NowPlaying } from "@/components/player/NowPlaying";
+import { QueueButton } from "@/components/QueueButton";
+import { QueuePanel } from "@/components/QueuePanel";
 import { getDb } from "@/lib/db/client";
 import { formatRelative } from "@/lib/format";
-import { resumeFrom } from "@/lib/player/progress";
-import { getNextInPlaylist, listPlaylists, playlistsContaining } from "@/lib/queries/playlists";
+import { getPlaylist, listPlaylists, listPlaylistVideos, playlistsContaining } from "@/lib/queries/playlists";
+import { loadNowPlaying } from "@/lib/queries/now-playing";
+import { listQueue, queueCursor } from "@/lib/queries/queue";
 import { getVisibleVideo } from "@/lib/queries/videos";
 import { ChannelAvatar } from "@/components/ChannelAvatar";
 import { Description, WatchedToggle } from "./WatchControls";
@@ -24,37 +25,25 @@ export default async function WatchPage({ params, searchParams }: PageProps<"/wa
   const video = await getVisibleVideo(db, id);
   if (!video) notFound();
 
-  const listId = Number(Array.isArray(sp.list) ? sp.list[0] : sp.list);
-  const [playlists, containing, nextId] = await Promise.all([
+  const rawList = Number(Array.isArray(sp.list) ? sp.list[0] : sp.list);
+  const playlist = Number.isInteger(rawList) && rawList > 0 ? await getPlaylist(db, rawList) : null;
+  const listId = playlist ? rawList : null;
+
+  const [playlists, containing, nowPlaying, queue, cursorId, playlistItems] = await Promise.all([
     listPlaylists(db),
     playlistsContaining(db, id),
-    Number.isInteger(listId) && listId > 0 ? getNextInPlaylist(db, listId, id) : Promise.resolve(null),
+    loadNowPlaying(db, id, listId),
+    listQueue(db),
+    queueCursor(db),
+    listId ? listPlaylistVideos(db, listId) : null,
   ]);
+  if (!nowPlaying) notFound();
   const watchLater = playlists.find((p) => p.isWatchLater);
-  const nextHref = nextId ? `/watch/${nextId}?list=${listId}` : null;
-
-  const startAt = resumeFrom({ positionSeconds: video.positionSeconds, watched: video.watched }, video.durationSeconds);
+  const panelItems = playlistItems ?? queue;
 
   return (
-    <div className="mx-auto max-w-5xl">
-      {video.embeddable ? (
-        <Player key={video.id} videoId={video.id} durationSeconds={video.durationSeconds} startAt={startAt} nextHref={nextHref} />
-      ) : (
-        <div className="relative aspect-video w-full overflow-hidden rounded-[14px] bg-black">
-          {video.thumbnailUrl && <Image src={video.thumbnailUrl} alt="" fill unoptimized className="object-cover opacity-40" />}
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
-            <p className="max-w-md text-pretty">O canal não permite assistir este vídeo fora do YouTube.</p>
-            <a
-              href={`https://www.youtube.com/watch?v=${video.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover"
-            >
-              <ExternalLink className="h-4 w-4" /> Abrir no YouTube
-            </a>
-          </div>
-        </div>
-      )}
+    <>
+      <NowPlaying video={nowPlaying} />
 
       <h1 className="mt-5 text-xl font-semibold leading-snug tracking-tight text-balance md:text-2xl">{video.title}</h1>
 
@@ -70,22 +59,23 @@ export default async function WatchPage({ params, searchParams }: PageProps<"/wa
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <WatchedToggle videoId={video.id} watched={video.watched} />
+          <QueueButton videoId={video.id} queued={queue.some((v) => v.id === video.id)} />
           <WatchLaterButton videoId={video.id} saved={!!watchLater && containing.includes(watchLater.id)} />
           <AddToPlaylistMenu videoId={video.id} playlists={playlists} containing={containing} />
         </div>
       </div>
-      {nextHref && (
-        <div className="mt-4 flex justify-end">
-          <Link
-            href={nextHref}
-            className="flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-text"
-          >
-            Próximo da playlist <SkipForward className="h-4 w-4" />
-          </Link>
-        </div>
+
+      {(panelItems.length > 0 || listId) && (
+        <QueuePanel
+          className="mt-6"
+          items={panelItems}
+          currentId={video.id}
+          cursorId={cursorId}
+          mode={listId ? { kind: "playlist", id: listId, name: playlist!.name } : { kind: "queue" }}
+        />
       )}
 
       <Description text={video.description} />
-    </div>
+    </>
   );
 }

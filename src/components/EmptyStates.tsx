@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { Check, Plus } from "lucide-react";
 
-/** The feed's last word: there is nothing more, and that is the point. */
-export function CaughtUp({ hadItems }: { hadItems: boolean }) {
+/**
+ * The feed's last word: there is nothing more, and that is the point.
+ * With filters on, it only speaks for the filtered view and offers the full feed.
+ */
+export function CaughtUp({ hadItems, filtered = false }: { hadItems: boolean; filtered?: boolean }) {
   return (
     <section
       aria-label="Fim do feed"
@@ -11,12 +14,24 @@ export function CaughtUp({ hadItems }: { hadItems: boolean }) {
       <span className="caught-up-mark flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 text-accent">
         <Check className="h-7 w-7" strokeWidth={2.5} />
       </span>
-      <h2 className="mt-5 text-xl font-semibold text-balance">Você está em dia</h2>
+      <h2 className="mt-5 text-xl font-semibold text-balance">
+        {filtered ? "Nada mais com esses filtros" : "Você está em dia"}
+      </h2>
       <p className="mt-2 max-w-sm text-muted text-pretty">
-        {hadItems
-          ? "Isso é tudo o que saiu nos seus canais. Pode fechar o app."
-          : "Nada novo nos seus canais por enquanto. Volte mais tarde."}
+        {filtered
+          ? "Outros canais podem ter novidades."
+          : hadItems
+            ? "Isso é tudo o que saiu nos seus canais. Pode fechar o app."
+            : "Nada novo nos seus canais por enquanto. Volte mais tarde."}
       </p>
+      {filtered && (
+        <Link
+          href="/"
+          className="mt-6 rounded-full border border-border px-5 py-2 text-sm font-medium text-text transition-colors hover:border-accent hover:bg-accent/10"
+        >
+          Ver o feed completo
+        </Link>
+      )}
     </section>
   );
 }
@@ -34,6 +49,16 @@ export function NoChannels() {
       >
         <Plus className="h-4 w-4" strokeWidth={2.5} /> Adicionar canal
       </Link>
+    </section>
+  );
+}
+
+export function NoHistory() {
+  return (
+    <section className="mt-24 flex flex-col items-center text-center">
+      <p className="max-w-sm text-muted text-pretty">
+        Nada por aqui ainda. Os vídeos que você começar a ver aparecem aqui.
+      </p>
     </section>
   );
 }

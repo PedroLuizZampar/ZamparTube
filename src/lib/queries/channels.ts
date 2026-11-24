@@ -1,9 +1,11 @@
-import { asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
-import { categories, channels } from "@/lib/db/schema";
+import { isUniqueViolation } from "@/lib/db/errors";
+import { categories, channelCategories, channels } from "@/lib/db/schema";
 import type { ChannelInfo } from "@/lib/youtube/client";
 import { uploadsPlaylistId } from "@/lib/youtube/parse";
 import { avatarSrcSql } from "./avatar";
+import { imageSrcSql } from "./images";
 
 export interface ChannelListItem {
   id: string;
@@ -12,8 +14,21 @@ export interface ChannelListItem {
   avatarUrl: string;
   /** Local URL of the stored avatar, or "" when not downloaded yet. */
   avatarSrc: string;
-  categoryId: number | null;
+  /** Categories this channel is in (a channel can be in several), ascending. */
+  categoryIds: number[];
   lastSyncedAt: Date | null;
+}
+
+// Qualified by hand: Drizzle prints single-table columns unqualified, which would bind to the subquery's own table.
+const categoryIdsSql = sql<number[]>`coalesce((select array_agg(cc.category_id order by cc.category_id)
+  from ${channelCategories} as cc where cc.channel_id = ${sql.raw('"channels"."id"')}), '{}')`.mapWith(
+  (v: unknown) => (Array.isArray(v) ? v.map(Number) : parsePgIntArray(String(v ?? "{}"))),
+);
+
+/** Some drivers return int[] as text ("{1,2}"). */
+function parsePgIntArray(text: string): number[] {
+  const inner = text.replace(/^{|}$/g, "");
+  return inner ? inner.split(",").map(Number) : [];
 }
 
 /** Active (not removed) channels, alphabetical. */
@@ -25,7 +40,7 @@ export async function listChannels(db: Db): Promise<ChannelListItem[]> {
       handle: channels.handle,
       avatarUrl: channels.avatarUrl,
       avatarSrc: avatarSrcSql,
-      categoryId: channels.categoryId,
+      categoryIds: categoryIdsSql,
       lastSyncedAt: channels.lastSyncedAt,
     })
     .from(channels)
@@ -41,7 +56,7 @@ export async function getChannel(db: Db, id: string): Promise<ChannelListItem | 
       handle: channels.handle,
       avatarUrl: channels.avatarUrl,
       avatarSrc: avatarSrcSql,
-      categoryId: channels.categoryId,
+      categoryIds: categoryIdsSql,
       lastSyncedAt: channels.lastSyncedAt,
     })
     .from(channels)
@@ -71,16 +86,50 @@ export async function removeChannel(db: Db, id: string): Promise<void> {
   await db.update(channels).set({ removedAt: new Date() }).where(eq(channels.id, id));
 }
 
-export async function setChannelCategory(db: Db, id: string, categoryId: number | null): Promise<void> {
-  await db.update(channels).set({ categoryId }).where(eq(channels.id, id));
+/** Adds the channel to a category (on) or takes it out (off). Adding twice is harmless. */
+export async function setChannelInCategory(db: Db, channelId: string, categoryId: number, on: boolean): Promise<void> {
+  if (on) {
+    await db.insert(channelCategories).values({ channelId, categoryId }).onConflictDoNothing();
+  } else {
+    await db
+      .delete(channelCategories)
+      .where(and(eq(channelCategories.channelId, channelId), eq(channelCategories.categoryId, categoryId)));
+  }
 }
 
-export async function listCategories(db: Db): Promise<Array<{ id: number; name: string }>> {
+export interface CategoryItem {
+  id: number;
+  name: string;
+  /** Local URL of the uploaded picture, or "". */
+  imageSrc: string;
+  /** Active (not removed) channels in this category. */
+  channelCount: number;
+}
+
+export async function listCategories(db: Db): Promise<CategoryItem[]> {
   return db
-    .select({ id: categories.id, name: categories.name })
+    .select({
+      id: categories.id,
+      name: categories.name,
+      imageSrc: imageSrcSql("category"),
+      // Qualified by hand: Drizzle prints single-table columns unqualified, and "id" would bind to channels.id here.
+      channelCount: sql<number>`(select count(*) from ${channelCategories} as cc
+        join ${channels} as ch on ch.id = cc.channel_id
+        where cc.category_id = ${sql.raw('"categories"."id"')} and ch.removed_at is null)`.mapWith(Number),
+    })
     .from(categories)
     .orderBy(asc(categories.position), asc(categories.id));
 }
+
+/** Thrown when another category already uses the name (case-insensitive). */
+export class CategoryNameTakenError extends Error {
+  constructor() {
+    super("Já existe uma categoria com esse nome.");
+    this.name = "CategoryNameTakenError";
+  }
+}
+
+const DEFAULT_CATEGORY_NAME = "Nova categoria";
 
 function cleanName(name: string): string {
   const trimmed = name.trim();
@@ -88,19 +137,48 @@ function cleanName(name: string): string {
   return trimmed.slice(0, 60);
 }
 
-export async function createCategory(db: Db, name: string): Promise<number> {
+async function categoryNameTaken(db: Db, name: string, exceptId?: number): Promise<boolean> {
   const [row] = await db
-    .insert(categories)
-    .values({ name: cleanName(name) })
-    .returning({ id: categories.id });
-  return row.id;
+    .select({ id: categories.id })
+    .from(categories)
+    .where(
+      and(
+        sql`lower(${categories.name}) = lower(${name})`,
+        exceptId === undefined ? undefined : ne(categories.id, exceptId),
+      ),
+    )
+    .limit(1);
+  return !!row;
 }
 
+/** Creates a category; without a name it picks a free "Nova categoria" name. Names are unique ignoring case. */
+export async function createCategory(db: Db, name?: string): Promise<number> {
+  let clean = name === undefined ? DEFAULT_CATEGORY_NAME : cleanName(name);
+  if (name === undefined) {
+    for (let n = 2; await categoryNameTaken(db, clean); n++) clean = `${DEFAULT_CATEGORY_NAME} ${n}`;
+  } else if (await categoryNameTaken(db, clean)) {
+    throw new CategoryNameTakenError();
+  }
+  try {
+    const [row] = await db.insert(categories).values({ name: clean }).returning({ id: categories.id });
+    return row.id;
+  } catch (e) {
+    throw isUniqueViolation(e) ? new CategoryNameTakenError() : e;
+  }
+}
+
+/** Renames a category; a case change of its own name is allowed. */
 export async function renameCategory(db: Db, id: number, name: string): Promise<void> {
-  await db.update(categories).set({ name: cleanName(name) }).where(eq(categories.id, id));
+  const clean = cleanName(name);
+  if (await categoryNameTaken(db, clean, id)) throw new CategoryNameTakenError();
+  try {
+    await db.update(categories).set({ name: clean }).where(eq(categories.id, id));
+  } catch (e) {
+    throw isUniqueViolation(e) ? new CategoryNameTakenError() : e;
+  }
 }
 
-/** Channels in this category become uncategorized (FK on delete set null). */
+/** Channels lose this category (their channel_categories rows cascade); the channels stay. */
 export async function deleteCategory(db: Db, id: number): Promise<void> {
   await db.delete(categories).where(eq(categories.id, id));
 }

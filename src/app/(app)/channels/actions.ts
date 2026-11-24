@@ -2,14 +2,7 @@
 
 import { requireSession } from "@/lib/auth/require";
 import { revalidatePath } from "next/cache";
-import {
-  createCategory,
-  deleteCategory,
-  removeChannel,
-  renameCategory,
-  setChannelCategory,
-  upsertChannel,
-} from "@/lib/queries/channels";
+import { removeChannel, setChannelInCategory, upsertChannel } from "@/lib/queries/channels";
 import { QUOTA_MESSAGE } from "@/lib/sync/messages";
 import { createSyncDeps } from "@/lib/sync/run-sync";
 import { syncChannel } from "@/lib/sync/sync-channel";
@@ -24,9 +17,12 @@ export interface ActionState {
 
 const done = () => revalidatePath("/", "layout");
 
-function parseCategoryId(value: FormDataEntryValue | null): number | null {
-  const n = Number(value);
-  return Number.isInteger(n) && n > 0 ? n : null;
+/** "1,3" → [1, 3]; anything that is not a positive integer is dropped. */
+function parseCategoryIds(value: FormDataEntryValue | null): number[] {
+  return String(value ?? "")
+    .split(",")
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0);
 }
 
 export async function addChannelAction(_prev: ActionState, form: FormData): Promise<ActionState> {
@@ -39,8 +35,9 @@ export async function addChannelAction(_prev: ActionState, form: FormData): Prom
     const info = await deps.yt.getChannel(parsed.ref);
     if (!info) return { ok: false, message: "Canal não encontrado. Confira o link ou o @." };
     await upsertChannel(deps.db, info);
-    const categoryId = parseCategoryId(form.get("categoryId"));
-    if (categoryId) await setChannelCategory(deps.db, info.id, categoryId);
+    const categoryIds = parseCategoryIds(form.get("categoryIds"));
+    // Adds the chosen categories; re-adding a channel never takes away categories it already had.
+    for (const id of categoryIds) await setChannelInCategory(deps.db, info.id, id, true).catch(() => {});
     const r = await syncChannel(deps, info.id);
     done();
     const count = r.inserted === 1 ? "1 vídeo" : `${r.inserted} vídeos`;
@@ -58,36 +55,10 @@ export async function removeChannelAction(channelId: string): Promise<void> {
   done();
 }
 
-export async function setChannelCategoryAction(channelId: string, categoryId: number | null): Promise<void> {
+/** Puts the channel in a category (on) or takes it out (off). */
+export async function setChannelCategoryAction(channelId: string, categoryId: number, on: boolean): Promise<void> {
   await requireSession();
-  await setChannelCategory(getDb(), channelId, categoryId);
-  done();
-}
-
-export async function createCategoryAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireSession();
-  try {
-    await createCategory(getDb(), String(form.get("name") ?? ""));
-    done();
-    return { ok: true, message: "" };
-  } catch {
-    return { ok: false, message: "Já existe uma categoria com esse nome (ou o nome está vazio)." };
-  }
-}
-
-export async function renameCategoryAction(id: number, name: string): Promise<ActionState> {
-  await requireSession();
-  try {
-    await renameCategory(getDb(), id, name);
-    done();
-    return { ok: true, message: "" };
-  } catch {
-    return { ok: false, message: "Nome inválido ou repetido." };
-  }
-}
-
-export async function deleteCategoryAction(id: number): Promise<void> {
-  await requireSession();
-  await deleteCategory(getDb(), id);
+  if (!Number.isInteger(categoryId) || categoryId <= 0) return;
+  await setChannelInCategory(getDb(), channelId, categoryId, on);
   done();
 }

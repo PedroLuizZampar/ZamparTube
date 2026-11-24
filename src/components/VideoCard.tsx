@@ -1,22 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Check, EyeOff, Radio } from "lucide-react";
-import { dismissAction } from "@/app/(app)/actions";
+import { Check } from "lucide-react";
 import { formatDuration, formatRelative } from "@/lib/format";
+import { CardActions } from "./CardActions";
 import { ChannelAvatar } from "./ChannelAvatar";
 import type { VideoCardData } from "@/lib/queries/videos";
 
 interface Props {
   video: VideoCardData;
-  /** Shows the "Dispensar" control (feed only). */
+  /** Adds "Dispensar do feed" to the card actions (feed only). */
   onFeed?: boolean;
+  /** Adds "Remover do histórico" to the card actions (history only). */
+  onHistory?: boolean;
   /** Extra query string for the watch link, e.g. "?list=3". */
   watchQuery?: string;
   /** Hide the channel line (on a channel page). */
   hideChannel?: boolean;
 }
 
-export function VideoCard({ video, onFeed = false, watchQuery = "", hideChannel = false }: Props) {
+export function VideoCard({ video, onFeed = false, onHistory = false, watchQuery = "", hideChannel = false }: Props) {
   const href = `/watch/${video.id}${watchQuery}`;
   const progress =
     video.durationSeconds > 0 && video.positionSeconds > 0
@@ -24,7 +26,7 @@ export function VideoCard({ video, onFeed = false, watchQuery = "", hideChannel 
       : 0;
 
   return (
-    <article className="group flex flex-col gap-3">
+    <article className="group relative flex flex-col gap-3">
       <Link
         href={href}
         className="relative block aspect-video overflow-hidden rounded-[14px] bg-surface-2 outline-offset-4"
@@ -42,18 +44,9 @@ export function VideoCard({ video, onFeed = false, watchQuery = "", hideChannel 
             }`}
           />
         )}
-        {(video.isLiveRecording || video.watched) && (
-          <span className="absolute left-2 top-2 flex flex-wrap gap-1">
-            {video.watched && (
-              <span className="flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-medium text-text">
-                <Check className="h-3 w-3 text-accent" /> Assistido
-              </span>
-            )}
-            {video.isLiveRecording && (
-              <span className="flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-medium text-text">
-                <Radio className="h-3 w-3 text-accent" /> Gravação de live
-              </span>
-            )}
+        {video.watched && (
+          <span className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-medium text-text">
+            <Check className="h-3 w-3 text-accent" /> Assistido
           </span>
         )}
         <span className="absolute bottom-2 right-2 rounded-md bg-black/80 px-1.5 py-0.5 text-xs font-medium tabular-nums text-text">
@@ -88,18 +81,9 @@ export function VideoCard({ video, onFeed = false, watchQuery = "", hideChannel 
             <time dateTime={video.publishedAt.toISOString()}>{formatRelative(video.publishedAt)}</time>
           </p>
         </div>
-        {onFeed && (
-          <form action={dismissAction.bind(null, video.id)} className="shrink-0">
-            <button
-              type="submit"
-              title="Dispensar do feed"
-              aria-label={`Dispensar "${video.title}" do feed`}
-              className="rounded-lg p-1.5 text-muted transition-opacity hover:bg-surface hover:text-text [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
-            >
-              <EyeOff className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-          </form>
-        )}
+        <CardActions videoId={video.id} title={video.title} savedForLater={video.savedForLater} canDismiss={onFeed}
+          canRemoveFromHistory={onHistory}
+        />
       </div>
     </article>
   );

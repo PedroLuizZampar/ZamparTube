@@ -24,13 +24,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    // Browser extensions (e.g. BRy Web) add attributes to <html> before React loads; ignore those differences here only.
+    // Browser extensions (e.g. BRy Web, ColorZilla) add attributes to <html>/<body> before React loads;
+    // ignore attribute differences on these two tags only (it does not reach their children).
     <html
       lang="pt-BR"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full bg-bg font-sans text-text">{children}</body>
+      <body className="min-h-full bg-bg font-sans text-text" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

@@ -38,3 +38,8 @@ export async function setWatched(db: Db, videoId: string, watched: boolean): Pro
 export async function dismissFromFeed(db: Db, videoId: string): Promise<void> {
   await db.update(videos).set({ dismissedAt: new Date() }).where(eq(videos.id, videoId));
 }
+
+/** "Remover do histórico": forgets the viewing (position and watched). The video itself stays in the app. */
+export async function clearWatchState(db: Db, videoId: string): Promise<void> {
+  await db.delete(watchState).where(eq(watchState.videoId, videoId));
+}

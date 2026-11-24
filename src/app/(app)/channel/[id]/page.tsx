@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { BackButton } from "@/components/BackButton";
 import { LoadMore } from "@/components/LoadMore";
 import { canLoadMore, pageLimit } from "@/lib/paging";
 import { VideoCard, VideoGrid } from "@/components/VideoCard";
@@ -18,6 +19,7 @@ export default async function ChannelPage({ params, searchParams }: PageProps<"/
 
   return (
     <>
+      <BackButton fallbackHref="/channels" />
       <header className="mb-8 flex items-center gap-4">
         <ChannelAvatar src={channel.avatarSrc} name={channel.title} size={64} />
         <div className="min-w-0">

@@ -1,4 +1,4 @@
-import { categories, channels, videos } from "@/lib/db/schema";
+import { categories, channelCategories, channels, videos } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/client";
 import { daysAgo } from "./fake-youtube";
 
@@ -32,4 +32,9 @@ export async function insertVideo(db: Db, id: string, extra: Partial<typeof vide
     inFeed: true,
     ...extra,
   });
+}
+
+/** Puts a channel in a category (a channel can be in several). */
+export async function addToCategory(db: Db, channelId: string, categoryId: number) {
+  await db.insert(channelCategories).values({ channelId, categoryId });
 }

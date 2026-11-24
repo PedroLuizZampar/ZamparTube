@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackButton } from "@/components/BackButton";
 import { Play } from "lucide-react";
 import { getDb } from "@/lib/db/client";
 import { formatDuration } from "@/lib/format";
 import { getPlaylist, listPlaylistVideos } from "@/lib/queries/playlists";
+import { queueCount } from "@/lib/queries/queue";
 import { PlaylistHeaderControls, PlaylistItemControls } from "../PlaylistForms";
+import { PlaylistQueueButtons } from "../PlaylistQueueButtons";
 
 function parseId(raw: string): number | null {
   const id = Number(raw);
@@ -25,11 +28,12 @@ export default async function PlaylistPage({ params }: PageProps<"/playlists/[id
   const db = getDb();
   const playlist = await getPlaylist(db, id);
   if (!playlist) notFound();
-  const items = await listPlaylistVideos(db, id);
+  const [items, queued] = await Promise.all([listPlaylistVideos(db, id), queueCount(db)]);
   const next = items.find((v) => !v.watched) ?? items[0];
 
   return (
     <div className="mx-auto max-w-4xl">
+      <BackButton fallbackHref="/playlists" />
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0">
@@ -39,19 +43,22 @@ export default async function PlaylistPage({ params }: PageProps<"/playlists/[id
           <PlaylistHeaderControls id={playlist.id} name={playlist.name} isWatchLater={playlist.isWatchLater} />
         </div>
         {next && (
-          <Link
-            href={`/watch/${next.id}?list=${id}`}
-            className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover"
-          >
-            <Play className="h-4 w-4 fill-current" /> Tocar a seguir
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/watch/${next.id}?list=${id}`}
+              className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover"
+            >
+              <Play className="h-4 w-4 fill-current" /> Continuar
+            </Link>
+            <PlaylistQueueButtons playlistId={id} queueCount={queued} />
+          </div>
         )}
       </header>
 
       {items.length === 0 ? (
         <p className="py-10 text-center text-muted">
           {playlist.isWatchLater
-            ? "Nada guardado ainda. Use “Assistir depois” na tela de um vídeo."
+            ? `Nada guardado ainda. Use o “${playlist.name}” nos cards ou na tela de um vídeo.`
             : "Playlist vazia. Adicione vídeos pela tela de cada vídeo."}
         </p>
       ) : (

@@ -7,6 +7,7 @@ import {
   setInPlaylistAction,
   setWatchLaterAction,
 } from "@/app/(app)/playlists/actions";
+import { useWatchLaterName } from "./WatchLaterName";
 
 type Playlist = { id: number; name: string; isWatchLater: boolean };
 
@@ -15,10 +16,12 @@ const pill = "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium
 export function WatchLaterButton({ videoId, saved }: { videoId: string; saved: boolean }) {
   const [optimistic, setOptimistic] = useOptimistic(saved);
   const [, start] = useTransition();
+  const name = useWatchLaterName();
   return (
     <button
       type="button"
       aria-pressed={optimistic}
+      title={optimistic ? `Remover de “${name}”` : `Salvar em “${name}”`}
       onClick={() =>
         start(async () => {
           setOptimistic(!optimistic);
@@ -28,7 +31,7 @@ export function WatchLaterButton({ videoId, saved }: { videoId: string; saved: b
       className={`${pill} ${optimistic ? "bg-accent/15 text-accent hover:bg-accent/25" : "bg-surface-2 hover:bg-border"}`}
     >
       {optimistic ? <Check className="h-4 w-4" strokeWidth={2.5} /> : <Clock className="h-4 w-4" />}
-      {optimistic ? "Salvo para depois" : "Assistir depois"}
+      <span className="max-w-48 truncate">{name}</span>
     </button>
   );
 }

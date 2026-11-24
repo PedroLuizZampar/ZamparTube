@@ -22,11 +22,24 @@ const tsvector = customType<{ data: string }>({
 export const shortsCheckEnum = pgEnum("shorts_check", ["not_needed", "pending", "ok", "short"]);
 export const liveStateEnum = pgEnum("live_state", ["none", "pending", "ended"]);
 
-export const categories = pgTable("categories", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  position: integer("position").notNull().default(0),
+/** Optional picture uploaded by the user (base64), served by /category-image/[id] and /playlist-image/[id]. */
+const imageColumns = () => ({
+  imageData: text("image_data"),
+  imageContentType: text("image_content_type"),
+  imageUpdatedAt: timestamp("image_updated_at", { withTimezone: true }),
 });
+
+export const categories = pgTable(
+  "categories",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    ...imageColumns(),
+  },
+  // Names are unique ignoring case ("Música" and "música" cannot coexist).
+  (t) => [uniqueIndex("categories_name_lower_unique").on(sql`lower(${t.name})`)],
+);
 
 export const channels = pgTable("channels", {
   id: text("id").primaryKey(),
@@ -34,7 +47,6 @@ export const channels = pgTable("channels", {
   handle: text("handle"),
   avatarUrl: text("avatar_url").notNull(),
   uploadsPlaylistId: text("uploads_playlist_id").notNull(),
-  categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
   addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   removedAt: timestamp("removed_at", { withTimezone: true }),
@@ -45,6 +57,20 @@ export const channels = pgTable("channels", {
   avatarContentType: text("avatar_content_type"),
   avatarFetchedAt: timestamp("avatar_fetched_at", { withTimezone: true }),
 });
+
+/** A channel can be in several categories. */
+export const channelCategories = pgTable(
+  "channel_categories",
+  {
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.channelId, t.categoryId] }), index("channel_categories_category_idx").on(t.categoryId)],
+);
 
 export const videos = pgTable(
   "videos",
@@ -94,8 +120,13 @@ export const playlists = pgTable(
     name: text("name").notNull(),
     isWatchLater: boolean("is_watch_later").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    ...imageColumns(),
   },
-  (t) => [uniqueIndex("playlists_single_watch_later").on(t.isWatchLater).where(sql`${t.isWatchLater} = true`)],
+  (t) => [
+    uniqueIndex("playlists_single_watch_later").on(t.isWatchLater).where(sql`${t.isWatchLater} = true`),
+    // Names are unique ignoring case ("Estudos" and "estudos" cannot coexist).
+    uniqueIndex("playlists_name_lower_unique").on(sql`lower(${t.name})`),
+  ],
 );
 
 export const playlistItems = pgTable(
@@ -111,4 +142,21 @@ export const playlistItems = pgTable(
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.playlistId, t.videoId] })],
+);
+
+/**
+ * The play queue. Rows with `playedAt` null are the upcoming videos (by `position`); played rows are a hidden
+ * stack (newest first) that only the "previous" button walks back through.
+ */
+export const queueItems = pgTable(
+  "queue_items",
+  {
+    videoId: text("video_id")
+      .primaryKey()
+      .references(() => videos.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    playedAt: timestamp("played_at", { withTimezone: true }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("queue_items_played_idx").on(t.playedAt)],
 );

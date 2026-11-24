@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "../../helpers/db";
 import { daysAgo, NOW } from "../../helpers/fake-youtube";
-import { CH_A, CH_B, insertCategory, insertChannel, insertVideo } from "../../helpers/fixtures";
+import { addToCategory, CH_A, CH_B, insertCategory, insertChannel, insertVideo } from "../../helpers/fixtures";
 import { channels, watchState } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/client";
 import { getVisibleVideo, listChannelVideos, listFeed, searchVideos } from "@/lib/queries/videos";
+import { addToPlaylist, getWatchLaterId } from "@/lib/queries/playlists";
+
+const CH_C = "UCcccccccccccccccccccccc";
 
 let db: Db;
 
@@ -33,36 +36,91 @@ describe("listFeed", () => {
     await insertVideo(db, "removed-ch", { channelId: CH_B });
     await db.update(channels).set({ removedAt: NOW }).where(eq(channels.id, CH_B));
 
-    expect(ids(await listFeed(db, { limit: 50 })).sort()).toEqual(["ok", "probed-ok", "rec"]);
+    expect(ids(await listFeed(db, { now: NOW, limit: 50 })).sort()).toEqual(["ok", "probed-ok"]);
   });
 
   it("filters by category and orders newest first", async () => {
     const cat = await insertCategory(db, "Programação");
-    await db.update(channels).set({ categoryId: cat }).where(eq(channels.id, CH_B));
+    await addToCategory(db, CH_B, cat);
     await insertVideo(db, "a-old", { publishedAt: daysAgo(3) });
     await insertVideo(db, "b-new", { channelId: CH_B, publishedAt: daysAgo(1) });
     await insertVideo(db, "b-old", { channelId: CH_B, publishedAt: daysAgo(5) });
 
-    expect(ids(await listFeed(db, { limit: 50 }))).toEqual(["b-new", "a-old", "b-old"]);
-    expect(ids(await listFeed(db, { limit: 50, categoryId: cat }))).toEqual(["b-new", "b-old"]);
+    expect(ids(await listFeed(db, { now: NOW, limit: 50 }))).toEqual(["b-new", "a-old", "b-old"]);
+    expect(ids(await listFeed(db, { now: NOW, limit: 50, categoryIds: [cat] }))).toEqual(["b-new", "b-old"]);
+  });
+
+  it("filters by several categories", async () => {
+    const cat1 = await insertCategory(db, "Um");
+    const cat2 = await insertCategory(db, "Dois");
+    await insertChannel(db, CH_C);
+    await addToCategory(db, CH_A, cat1);
+    await addToCategory(db, CH_B, cat2);
+    await insertVideo(db, "a", { channelId: CH_A });
+    await insertVideo(db, "b", { channelId: CH_B });
+    await insertVideo(db, "c", { channelId: CH_C });
+
+    expect(ids(await listFeed(db, { now: NOW, limit: 50, categoryIds: [cat1, cat2] })).sort()).toEqual(["a", "b"]);
+    expect(ids(await listFeed(db, { now: NOW, limit: 50, categoryIds: [] })).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("a channel in two categories shows up under either one", async () => {
+    const cat1 = await insertCategory(db, "Um");
+    const cat2 = await insertCategory(db, "Dois");
+    await addToCategory(db, CH_A, cat1);
+    await addToCategory(db, CH_A, cat2);
+    await insertVideo(db, "a");
+    await insertVideo(db, "b", { channelId: CH_B });
+    expect(ids(await listFeed(db, { now: NOW, limit: 50, categoryIds: [cat1] }))).toEqual(["a"]);
+    expect(ids(await listFeed(db, { now: NOW, limit: 50, categoryIds: [cat2] }))).toEqual(["a"]);
+    expect(ids(await listFeed(db, { now: NOW, limit: 50, categoryIds: [cat1, cat2] }))).toEqual(["a"]);
+  });
+
+  it("filters by several channels and combines with categories", async () => {
+    const cat1 = await insertCategory(db, "Um");
+    await insertChannel(db, CH_C);
+    await addToCategory(db, CH_A, cat1);
+    await insertVideo(db, "a", { channelId: CH_A });
+    await insertVideo(db, "b", { channelId: CH_B });
+    await insertVideo(db, "c", { channelId: CH_C });
+
+    expect(ids(await listFeed(db, { now: NOW, limit: 50, channelIds: [CH_A, CH_C] })).sort()).toEqual(["a", "c"]);
+    expect(ids(await listFeed(db, { now: NOW, limit: 50, categoryIds: [cat1], channelIds: [CH_B] }))).toEqual([]);
+  });
+
+  it("only shows the last 14 days", async () => {
+    await insertVideo(db, "d13", { publishedAt: daysAgo(13) });
+    await insertVideo(db, "d15", { publishedAt: daysAgo(15) });
+    expect(ids(await listFeed(db, { now: NOW, limit: 50 }))).toEqual(["d13"]);
+  });
+
+  it("marks cards saved for later", async () => {
+    await insertVideo(db, "saved");
+    await insertVideo(db, "plain", { publishedAt: daysAgo(2) });
+    await addToPlaylist(db, await getWatchLaterId(db), "saved");
+    const items = (await listFeed(db, { now: NOW, limit: 50 })).items;
+    expect(items.map((v) => [v.id, v.savedForLater])).toEqual([
+      ["saved", true],
+      ["plain", false],
+    ]);
   });
 
   it("returns hasMore when there are more than limit items", async () => {
     for (let i = 0; i < 5; i++) await insertVideo(db, `v${i}`, { publishedAt: daysAgo(i + 1) });
-    const page = await listFeed(db, { limit: 3 });
+    const page = await listFeed(db, { now: NOW, limit: 3 });
     expect(ids(page)).toEqual(["v0", "v1", "v2"]);
     expect(page.hasMore).toBe(true);
-    expect((await listFeed(db, { limit: 5 })).hasMore).toBe(false);
+    expect((await listFeed(db, { now: NOW, limit: 5 })).hasMore).toBe(false);
   });
 
   it("is empty when all caught up", async () => {
-    expect(await listFeed(db, { limit: 24 })).toEqual({ items: [], hasMore: false });
+    expect(await listFeed(db, { now: NOW, limit: 24 })).toEqual({ items: [], hasMore: false });
   });
 
   it("maps card fields including channel and progress", async () => {
     await insertVideo(db, "v", { title: "Título", durationSeconds: 900 });
     await db.insert(watchState).values({ videoId: "v", positionSeconds: 300 });
-    const [card] = (await listFeed(db, { limit: 1 })).items;
+    const [card] = (await listFeed(db, { now: NOW, limit: 1 })).items;
     expect(card).toMatchObject({
       id: "v",
       title: "Título",
@@ -114,6 +172,15 @@ describe("searchVideos", () => {
   });
 });
 
+describe("live recordings", () => {
+  it("hides live recordings from search, channel and watch page", async () => {
+    await insertVideo(db, "rec", { liveState: "ended", isLiveRecording: true, title: "Live gravada" });
+    expect(ids(await searchVideos(db, "gravada", { limit: 10 }))).toEqual([]);
+    expect(ids(await listChannelVideos(db, CH_A, { limit: 10 }))).toEqual([]);
+    expect(await getVisibleVideo(db, "rec")).toBeNull();
+  });
+});
+
 describe("getVisibleVideo", () => {
   it("returns null for a short and for a pending live", async () => {
     await insertVideo(db, "s", { isShort: true, shortsCheck: "short" });
@@ -142,7 +209,7 @@ describe("channel avatar source", () => {
       .set({ avatarData: "AQID", avatarContentType: "image/jpeg", avatarFetchedAt: new Date("2026-11-01T00:00:00Z") })
       .where(eq(channels.id, CH_A));
     await insertVideo(db, "v");
-    const [card] = (await listFeed(db, { limit: 1 })).items;
+    const [card] = (await listFeed(db, { now: NOW, limit: 1 })).items;
     expect(card.channelAvatarSrc).toBe(`/avatar/${CH_A}?v=1793491200`);
   });
 });

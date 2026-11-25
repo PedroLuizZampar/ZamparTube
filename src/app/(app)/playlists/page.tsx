@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Clock, ListVideo, Pencil } from "lucide-react";
+import { requireUserId } from "@/lib/auth/require";
 import { getDb } from "@/lib/db/client";
 import { listPlaylists } from "@/lib/queries/playlists";
 import { CreatePlaylistButton, DeletePlaylistButton, PlaylistEditor } from "./PlaylistForms";
@@ -11,8 +12,7 @@ export const metadata: Metadata = { title: "Playlists · ZamparTube" };
 export default async function PlaylistsPage({ searchParams }: PageProps<"/playlists">) {
   const sp = await searchParams;
   const editingId = Number(Array.isArray(sp.editar) ? sp.editar[0] : sp.editar);
-  const db = getDb();
-  const lists = await listPlaylists(db);
+  const lists = await listPlaylists(getDb(), await requireUserId());
 
   return (
     <div className="mx-auto max-w-6xl">

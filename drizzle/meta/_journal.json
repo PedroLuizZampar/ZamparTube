@@ -50,6 +50,20 @@
       "when": 1795535044215,
       "tag": "0006_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795630194396,
+      "tag": "0007_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795632086096,
+      "tag": "0008_profile_photo",
+      "breakpoints": true
     }
   ]
 }

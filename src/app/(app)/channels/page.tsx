@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { requireUserId } from "@/lib/auth/require";
 import { getDb } from "@/lib/db/client";
 import { formatRelative } from "@/lib/format";
 import { listCategories, listChannels } from "@/lib/queries/channels";
@@ -9,8 +10,9 @@ import { AddChannelForm, ChannelCategoryTags, RemoveChannelButton } from "./Chan
 export const metadata: Metadata = { title: "Canais · ZamparTube" };
 
 export default async function ChannelsPage() {
+  const userId = await requireUserId();
   const db = getDb();
-  const [channels, allCategories] = await Promise.all([listChannels(db), listCategories(db)]);
+  const [channels, allCategories] = await Promise.all([listChannels(db, userId), listCategories(db, userId)]);
   const categories = allCategories.map(({ id, name, imageSrc }) => ({ id, name, imageSrc }));
 
   return (

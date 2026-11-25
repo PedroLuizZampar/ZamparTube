@@ -21,14 +21,19 @@ export interface WatchNav {
 }
 
 /** Previous/next video for the watch page: the playlist order with `?list=`, the queue otherwise. */
-export async function resolveWatchNav(db: Db, currentId: string, listId: number | null): Promise<WatchNav> {
+export async function resolveWatchNav(
+  db: Db,
+  userId: number,
+  currentId: string,
+  listId: number | null,
+): Promise<WatchNav> {
   const source: NavSource = listId ? "playlist" : "queue";
   const { prev, next } = listId
     ? {
-        prev: await getPrevInPlaylist(db, listId, currentId),
-        next: await getNextInPlaylist(db, listId, currentId),
+        prev: await getPrevInPlaylist(db, userId, listId, currentId),
+        next: await getNextInPlaylist(db, userId, listId, currentId),
       }
-    : await queueNeighbors(db, currentId);
+    : await queueNeighbors(db, userId, currentId);
 
   const wanted = [prev, next].filter((id): id is string => !!id);
   const rows = wanted.length

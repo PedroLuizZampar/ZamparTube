@@ -1,7 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
-import { Trash2 } from "lucide-react";
+import { useOptimistic, useTransition } from "react";
+import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { CreateButton } from "@/components/CreateButton";
 import { ImagePicker } from "@/components/ImagePicker";
 import { NameEditor } from "@/components/NameEditor";
@@ -10,6 +10,7 @@ import {
   createCategoryQuickAction,
   deleteCategoryAction,
   renameCategoryAction,
+  setCategoryHiddenAction,
   setCategoryImageAction,
 } from "./actions";
 
@@ -35,6 +36,36 @@ export function CategoryEditor({ id, name, hasImage }: { id: number; name: strin
       />
       <ImagePicker action={setCategoryImageAction.bind(null, id)} hasImage={hasImage} size={CATEGORY_IMAGE_SIZE} />
     </div>
+  );
+}
+
+/**
+ * "Ocultar da tela inicial": the category's channels leave the home feed and only show when filtering by this
+ * category or by the channel.
+ */
+export function HideFromHomeButton({ id, name, hidden }: { id: number; name: string; hidden: boolean }) {
+  const [optimistic, setOptimistic] = useOptimistic(hidden);
+  const [, start] = useTransition();
+  const Icon = optimistic ? EyeOff : Eye;
+  const label = optimistic ? `Mostrar ${name} na tela inicial` : `Ocultar ${name} da tela inicial`;
+  return (
+    <button
+      type="button"
+      aria-pressed={optimistic}
+      aria-label={label}
+      title={optimistic ? "Oculta da tela inicial: clique para mostrar" : "Ocultar da tela inicial"}
+      onClick={() =>
+        start(async () => {
+          setOptimistic(!optimistic);
+          await setCategoryHiddenAction(id, !optimistic);
+        })
+      }
+      className={`shrink-0 rounded-lg p-1.5 transition-colors hover:bg-surface ${
+        optimistic ? "text-accent" : "text-muted hover:text-text"
+      }`}
+    >
+      <Icon className="h-4 w-4" strokeWidth={1.75} />
+    </button>
   );
 }
 

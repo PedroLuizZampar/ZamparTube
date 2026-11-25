@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackButton } from "@/components/BackButton";
 import { Play } from "lucide-react";
+import { requireUserId } from "@/lib/auth/require";
 import { getDb } from "@/lib/db/client";
 import { formatDuration } from "@/lib/format";
 import { getPlaylist, listPlaylistVideos } from "@/lib/queries/playlists";
@@ -18,17 +19,18 @@ function parseId(raw: string): number | null {
 
 export async function generateMetadata({ params }: PageProps<"/playlists/[id]">): Promise<Metadata> {
   const id = parseId((await params).id);
-  const p = id ? await getPlaylist(getDb(), id) : null;
+  const p = id ? await getPlaylist(getDb(), await requireUserId(), id) : null;
   return { title: p ? `${p.name} · ZamparTube` : "ZamparTube" };
 }
 
 export default async function PlaylistPage({ params }: PageProps<"/playlists/[id]">) {
   const id = parseId((await params).id);
   if (!id) notFound();
+  const userId = await requireUserId();
   const db = getDb();
-  const playlist = await getPlaylist(db, id);
+  const playlist = await getPlaylist(db, userId, id);
   if (!playlist) notFound();
-  const [items, queued] = await Promise.all([listPlaylistVideos(db, id), queueCount(db)]);
+  const [items, queued] = await Promise.all([listPlaylistVideos(db, userId, id), queueCount(db, userId)]);
   const next = items.find((v) => !v.watched) ?? items[0];
 
   return (

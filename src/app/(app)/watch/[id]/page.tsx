@@ -5,6 +5,7 @@ import { AddToPlaylistMenu, WatchLaterButton } from "@/components/AddToPlaylistM
 import { NowPlaying } from "@/components/player/NowPlaying";
 import { QueueButton } from "@/components/QueueButton";
 import { QueuePanel } from "@/components/QueuePanel";
+import { requireUserId } from "@/lib/auth/require";
 import { getDb } from "@/lib/db/client";
 import { formatRelative } from "@/lib/format";
 import { getPlaylist, listPlaylists, listPlaylistVideos, playlistsContaining } from "@/lib/queries/playlists";
@@ -15,27 +16,28 @@ import { ChannelAvatar } from "@/components/ChannelAvatar";
 import { Description, WatchedToggle } from "./WatchControls";
 
 export async function generateMetadata({ params }: PageProps<"/watch/[id]">): Promise<Metadata> {
-  const video = await getVisibleVideo(getDb(), (await params).id);
+  const video = await getVisibleVideo(getDb(), await requireUserId(), (await params).id);
   return { title: video ? `${video.title} · ZamparTube` : "ZamparTube" };
 }
 
 export default async function WatchPage({ params, searchParams }: PageProps<"/watch/[id]">) {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
+  const userId = await requireUserId();
   const db = getDb();
-  const video = await getVisibleVideo(db, id);
+  const video = await getVisibleVideo(db, userId, id);
   if (!video) notFound();
 
   const rawList = Number(Array.isArray(sp.list) ? sp.list[0] : sp.list);
-  const playlist = Number.isInteger(rawList) && rawList > 0 ? await getPlaylist(db, rawList) : null;
+  const playlist = Number.isInteger(rawList) && rawList > 0 ? await getPlaylist(db, userId, rawList) : null;
   const listId = playlist ? rawList : null;
 
   const [playlists, containing, nowPlaying, queue, cursorId, playlistItems] = await Promise.all([
-    listPlaylists(db),
-    playlistsContaining(db, id),
-    loadNowPlaying(db, id, listId),
-    listQueue(db),
-    queueCursor(db),
-    listId ? listPlaylistVideos(db, listId) : null,
+    listPlaylists(db, userId),
+    playlistsContaining(db, userId, id),
+    loadNowPlaying(db, userId, id, listId),
+    listQueue(db, userId),
+    queueCursor(db, userId),
+    listId ? listPlaylistVideos(db, userId, listId) : null,
   ]);
   if (!nowPlaying) notFound();
   const watchLater = playlists.find((p) => p.isWatchLater);

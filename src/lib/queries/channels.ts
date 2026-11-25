@@ -1,7 +1,7 @@
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, ne, notExists, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import { isUniqueViolation } from "@/lib/db/errors";
-import { categories, channelCategories, channels } from "@/lib/db/schema";
+import { categories, channelCategories, channels, userChannels } from "@/lib/db/schema";
 import type { ChannelInfo } from "@/lib/youtube/client";
 import { uploadsPlaylistId } from "@/lib/youtube/parse";
 import { avatarSrcSql } from "./avatar";
@@ -14,16 +14,18 @@ export interface ChannelListItem {
   avatarUrl: string;
   /** Local URL of the stored avatar, or "" when not downloaded yet. */
   avatarSrc: string;
-  /** Categories this channel is in (a channel can be in several), ascending. */
+  /** The user's categories this channel is in (a channel can be in several), ascending. */
   categoryIds: number[];
   lastSyncedAt: Date | null;
 }
 
 // Qualified by hand: Drizzle prints single-table columns unqualified, which would bind to the subquery's own table.
-const categoryIdsSql = sql<number[]>`coalesce((select array_agg(cc.category_id order by cc.category_id)
-  from ${channelCategories} as cc where cc.channel_id = ${sql.raw('"channels"."id"')}), '{}')`.mapWith(
-  (v: unknown) => (Array.isArray(v) ? v.map(Number) : parsePgIntArray(String(v ?? "{}"))),
-);
+const categoryIdsSql = (userId: number) =>
+  sql<number[]>`coalesce((select array_agg(cc.category_id order by cc.category_id)
+    from ${channelCategories} as cc join ${categories} as cat on cat.id = cc.category_id
+    where cc.channel_id = ${sql.raw('"channels"."id"')} and cat.user_id = ${userId}), '{}')`.mapWith((v: unknown) =>
+    Array.isArray(v) ? v.map(Number) : parsePgIntArray(String(v ?? "{}")),
+  );
 
 /** Some drivers return int[] as text ("{1,2}"). */
 function parsePgIntArray(text: string): number[] {
@@ -31,40 +33,32 @@ function parsePgIntArray(text: string): number[] {
   return inner ? inner.split(",").map(Number) : [];
 }
 
-/** Active (not removed) channels, alphabetical. */
-export async function listChannels(db: Db): Promise<ChannelListItem[]> {
+const channelFields = (userId: number) => ({
+  id: channels.id,
+  title: channels.title,
+  handle: channels.handle,
+  avatarUrl: channels.avatarUrl,
+  avatarSrc: avatarSrcSql,
+  categoryIds: categoryIdsSql(userId),
+  lastSyncedAt: channels.lastSyncedAt,
+});
+
+/** The channels the user follows, alphabetical. */
+export async function listChannels(db: Db, userId: number): Promise<ChannelListItem[]> {
   return db
-    .select({
-      id: channels.id,
-      title: channels.title,
-      handle: channels.handle,
-      avatarUrl: channels.avatarUrl,
-      avatarSrc: avatarSrcSql,
-      categoryIds: categoryIdsSql,
-      lastSyncedAt: channels.lastSyncedAt,
-    })
+    .select(channelFields(userId))
     .from(channels)
-    .where(isNull(channels.removedAt))
+    .innerJoin(userChannels, and(eq(userChannels.channelId, channels.id), eq(userChannels.userId, userId)))
     .orderBy(sql`lower(${channels.title})`);
 }
 
-export async function getChannel(db: Db, id: string): Promise<ChannelListItem | null> {
-  const [row] = await db
-    .select({
-      id: channels.id,
-      title: channels.title,
-      handle: channels.handle,
-      avatarUrl: channels.avatarUrl,
-      avatarSrc: avatarSrcSql,
-      categoryIds: categoryIdsSql,
-      lastSyncedAt: channels.lastSyncedAt,
-    })
-    .from(channels)
-    .where(eq(channels.id, id));
+/** Any known channel (a playlist can hold videos of a channel the user does not follow), with the user's categories. */
+export async function getChannel(db: Db, userId: number, id: string): Promise<ChannelListItem | null> {
+  const [row] = await db.select(channelFields(userId)).from(channels).where(eq(channels.id, id));
   return row ?? null;
 }
 
-/** Adds a channel, or reactivates a removed one with fresh title/avatar. */
+/** Adds a channel to the shared catalog, or refreshes title/avatar and reactivates it for syncing. */
 export async function upsertChannel(db: Db, info: ChannelInfo): Promise<void> {
   await db
     .insert(channels)
@@ -81,13 +75,47 @@ export async function upsertChannel(db: Db, info: ChannelInfo): Promise<void> {
     });
 }
 
-/** Soft delete: videos leave the feed and search, but stay available to playlists. */
-export async function removeChannel(db: Db, id: string): Promise<void> {
-  await db.update(channels).set({ removedAt: new Date() }).where(eq(channels.id, id));
+/** The user starts following a channel already in the catalog. Following twice is harmless. */
+export async function followChannel(db: Db, userId: number, channelId: string): Promise<void> {
+  await db.insert(userChannels).values({ userId, channelId }).onConflictDoNothing();
+  await db.update(channels).set({ removedAt: null }).where(eq(channels.id, channelId));
 }
 
-/** Adds the channel to a category (on) or takes it out (off). Adding twice is harmless. */
-export async function setChannelInCategory(db: Db, channelId: string, categoryId: number, on: boolean): Promise<void> {
+/**
+ * The user stops following: the channel's videos leave their feed and search, but stay available to their playlists.
+ * Its categories are kept, so following it again brings them back. When nobody follows it anymore, syncing stops.
+ */
+export async function removeChannel(db: Db, userId: number, id: string): Promise<void> {
+  await db.delete(userChannels).where(and(eq(userChannels.userId, userId), eq(userChannels.channelId, id)));
+  await db
+    .update(channels)
+    .set({ removedAt: new Date() })
+    .where(
+      and(
+        eq(channels.id, id),
+        notExists(db.select({ one: sql`1` }).from(userChannels).where(eq(userChannels.channelId, id))),
+      ),
+    );
+}
+
+/** True when the category exists and belongs to the user. */
+async function ownsCategory(db: Db, userId: number, categoryId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(and(eq(categories.id, categoryId), eq(categories.userId, userId)));
+  return !!row;
+}
+
+/** Adds the channel to one of the user's categories (on) or takes it out (off). Adding twice is harmless. */
+export async function setChannelInCategory(
+  db: Db,
+  userId: number,
+  channelId: string,
+  categoryId: number,
+  on: boolean,
+): Promise<void> {
+  if (!(await ownsCategory(db, userId, categoryId))) return;
   if (on) {
     await db.insert(channelCategories).values({ channelId, categoryId }).onConflictDoNothing();
   } else {
@@ -102,26 +130,30 @@ export interface CategoryItem {
   name: string;
   /** Local URL of the uploaded picture, or "". */
   imageSrc: string;
-  /** Active (not removed) channels in this category. */
+  /** Channels the user follows in this category. */
   channelCount: number;
+  /** Its channels only show on the home feed when filtered for. */
+  hiddenFromHome: boolean;
 }
 
-export async function listCategories(db: Db): Promise<CategoryItem[]> {
+export async function listCategories(db: Db, userId: number): Promise<CategoryItem[]> {
   return db
     .select({
       id: categories.id,
       name: categories.name,
       imageSrc: imageSrcSql("category"),
-      // Qualified by hand: Drizzle prints single-table columns unqualified, and "id" would bind to channels.id here.
+      hiddenFromHome: categories.hiddenFromHome,
+      // Qualified by hand: Drizzle prints single-table columns unqualified, and "id" would bind to another table here.
       channelCount: sql<number>`(select count(*) from ${channelCategories} as cc
-        join ${channels} as ch on ch.id = cc.channel_id
-        where cc.category_id = ${sql.raw('"categories"."id"')} and ch.removed_at is null)`.mapWith(Number),
+        join ${userChannels} as uc on uc.channel_id = cc.channel_id and uc.user_id = ${userId}
+        where cc.category_id = ${sql.raw('"categories"."id"')})`.mapWith(Number),
     })
     .from(categories)
+    .where(eq(categories.userId, userId))
     .orderBy(asc(categories.position), asc(categories.id));
 }
 
-/** Thrown when another category already uses the name (case-insensitive). */
+/** Thrown when another category of the user already uses the name (case-insensitive). */
 export class CategoryNameTakenError extends Error {
   constructor() {
     super("Já existe uma categoria com esse nome.");
@@ -137,12 +169,13 @@ function cleanName(name: string): string {
   return trimmed.slice(0, 60);
 }
 
-async function categoryNameTaken(db: Db, name: string, exceptId?: number): Promise<boolean> {
+async function categoryNameTaken(db: Db, userId: number, name: string, exceptId?: number): Promise<boolean> {
   const [row] = await db
     .select({ id: categories.id })
     .from(categories)
     .where(
       and(
+        eq(categories.userId, userId),
         sql`lower(${categories.name}) = lower(${name})`,
         exceptId === undefined ? undefined : ne(categories.id, exceptId),
       ),
@@ -151,34 +184,46 @@ async function categoryNameTaken(db: Db, name: string, exceptId?: number): Promi
   return !!row;
 }
 
-/** Creates a category; without a name it picks a free "Nova categoria" name. Names are unique ignoring case. */
-export async function createCategory(db: Db, name?: string): Promise<number> {
+/** Creates a category; without a name it picks a free "Nova categoria" name. Names are unique per user ignoring case. */
+export async function createCategory(db: Db, userId: number, name?: string): Promise<number> {
   let clean = name === undefined ? DEFAULT_CATEGORY_NAME : cleanName(name);
   if (name === undefined) {
-    for (let n = 2; await categoryNameTaken(db, clean); n++) clean = `${DEFAULT_CATEGORY_NAME} ${n}`;
-  } else if (await categoryNameTaken(db, clean)) {
+    for (let n = 2; await categoryNameTaken(db, userId, clean); n++) clean = `${DEFAULT_CATEGORY_NAME} ${n}`;
+  } else if (await categoryNameTaken(db, userId, clean)) {
     throw new CategoryNameTakenError();
   }
   try {
-    const [row] = await db.insert(categories).values({ name: clean }).returning({ id: categories.id });
+    const [row] = await db.insert(categories).values({ userId, name: clean }).returning({ id: categories.id });
     return row.id;
   } catch (e) {
     throw isUniqueViolation(e) ? new CategoryNameTakenError() : e;
   }
 }
 
-/** Renames a category; a case change of its own name is allowed. */
-export async function renameCategory(db: Db, id: number, name: string): Promise<void> {
+/** Renames one of the user's categories; a case change of its own name is allowed. */
+export async function renameCategory(db: Db, userId: number, id: number, name: string): Promise<void> {
   const clean = cleanName(name);
-  if (await categoryNameTaken(db, clean, id)) throw new CategoryNameTakenError();
+  if (await categoryNameTaken(db, userId, clean, id)) throw new CategoryNameTakenError();
   try {
-    await db.update(categories).set({ name: clean }).where(eq(categories.id, id));
+    await db
+      .update(categories)
+      .set({ name: clean })
+      .where(and(eq(categories.id, id), eq(categories.userId, userId)));
   } catch (e) {
     throw isUniqueViolation(e) ? new CategoryNameTakenError() : e;
   }
 }
 
-/** Channels lose this category (their channel_categories rows cascade); the channels stay. */
-export async function deleteCategory(db: Db, id: number): Promise<void> {
-  await db.delete(categories).where(eq(categories.id, id));
+/** Hides the category's channels from the home feed (they still show when filtered for), or shows them again. */
+export async function setCategoryHiddenFromHome(db: Db, userId: number, id: number, hidden: boolean): Promise<void> {
+  await db
+    .update(categories)
+    .set({ hiddenFromHome: hidden })
+    .where(and(eq(categories.id, id), eq(categories.userId, userId)));
 }
+
+/** Channels lose this category (their channel_categories rows cascade); the channels stay. */
+export async function deleteCategory(db: Db, userId: number, id: number): Promise<void> {
+  await db.delete(categories).where(and(eq(categories.id, id), eq(categories.userId, userId)));
+}
+

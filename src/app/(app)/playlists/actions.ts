@@ -1,6 +1,6 @@
 "use server";
 
-import { requireSession } from "@/lib/auth/require";
+import { requireUserId } from "@/lib/auth/require";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db/client";
@@ -41,20 +41,20 @@ function nameError(e: unknown): ActionState {
 
 /** "Criar" on the playlists page: a new playlist with a free default name, then the page opens its name for editing. */
 export async function createPlaylistQuickAction(): Promise<{ id: number }> {
-  await requireSession();
-  const id = await createPlaylist(getDb());
+  const userId = await requireUserId();
+  const id = await createPlaylist(getDb(), userId);
   done();
   return { id };
 }
 
 /** Creates a playlist and puts the video in it (from the watch page). */
 export async function createPlaylistWithVideoAction(name: string, videoId: string): Promise<ActionState> {
-  await requireSession();
+  const userId = await requireUserId();
   if (!VIDEO_ID.test(videoId)) return { ok: false, message: "Vídeo inválido" };
   try {
     const db = getDb();
-    const id = await createPlaylist(db, name);
-    await addToPlaylist(db, id, videoId);
+    const id = await createPlaylist(db, userId, name);
+    await addToPlaylist(db, userId, id, videoId);
     done();
     return { ok: true, message: "" };
   } catch (e) {
@@ -63,11 +63,11 @@ export async function createPlaylistWithVideoAction(name: string, videoId: strin
 }
 
 export async function renamePlaylistAction(playlistId: number, name: string): Promise<ActionState> {
-  await requireSession();
+  const userId = await requireUserId();
   assertIds(playlistId);
   if (!name.trim()) return { ok: false, message: "O nome não pode ficar vazio." };
   try {
-    await renamePlaylist(getDb(), playlistId, name);
+    await renamePlaylist(getDb(), userId, playlistId, name);
     done();
     return { ok: true, message: "" };
   } catch (e) {
@@ -77,48 +77,47 @@ export async function renamePlaylistAction(playlistId: number, name: string): Pr
 }
 
 export async function deletePlaylistAction(playlistId: number): Promise<void> {
-  await requireSession();
+  const userId = await requireUserId();
   assertIds(playlistId);
-  await deletePlaylist(getDb(), playlistId);
+  await deletePlaylist(getDb(), userId, playlistId);
   done();
   redirect("/playlists");
 }
 
 export async function setInPlaylistAction(playlistId: number, videoId: string, inPlaylist: boolean): Promise<void> {
-  await requireSession();
+  const userId = await requireUserId();
   assertIds(playlistId, videoId);
   const db = getDb();
-  if (inPlaylist) await addToPlaylist(db, playlistId, videoId);
-  else await removeFromPlaylist(db, playlistId, videoId);
+  if (inPlaylist) await addToPlaylist(db, userId, playlistId, videoId);
+  else await removeFromPlaylist(db, userId, playlistId, videoId);
   done();
 }
 
 export async function setWatchLaterAction(videoId: string, inPlaylist: boolean): Promise<void> {
-  await requireSession();
-  const db = getDb();
-  await setInPlaylistAction(await getWatchLaterId(db), videoId, inPlaylist);
+  const userId = await requireUserId();
+  await setInPlaylistAction(await getWatchLaterId(getDb(), userId), videoId, inPlaylist);
 }
 
 export async function moveInPlaylistAction(playlistId: number, videoId: string, direction: "up" | "down"): Promise<void> {
-  await requireSession();
+  const userId = await requireUserId();
   assertIds(playlistId, videoId);
   if (direction !== "up" && direction !== "down") throw new Error("Direção inválida");
-  await moveInPlaylist(getDb(), playlistId, videoId, direction);
+  await moveInPlaylist(getDb(), userId, playlistId, videoId, direction);
   done();
 }
 
 /** Sets (form field "image") or, with form field "remove", clears the playlist's picture. */
 export async function setPlaylistImageAction(id: number, form: FormData): Promise<ActionState> {
-  await requireSession();
+  const userId = await requireUserId();
   if (!Number.isInteger(id) || id <= 0) return { ok: false, message: "Item inválido." };
   if (form.get("remove")) {
-    await setImage(getDb(), "playlist", id, null);
+    await setImage(getDb(), userId, "playlist", id, null);
     done();
     return { ok: true, message: "" };
   }
   const img = await parseImageUpload(form.get("image"));
   if ("error" in img) return { ok: false, message: img.error };
-  await setImage(getDb(), "playlist", id, img);
+  await setImage(getDb(), userId, "playlist", id, img);
   done();
   return { ok: true, message: "" };
 }

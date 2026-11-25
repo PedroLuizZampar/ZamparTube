@@ -11,7 +11,7 @@ export function FeedFilterBar({
   filters,
   basePath,
 }: {
-  categories: Array<{ id: number; name: string; imageSrc?: string }>;
+  categories: Array<{ id: number; name: string; imageSrc?: string; hiddenFromHome?: boolean }>;
   channels: Channel[];
   filters: FeedFilters;
   basePath: string;

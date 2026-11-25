@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, gte, inArray, ne, or, sql } from "drizzle-orm";
 import {
   FEED_WINDOW_DAYS,
   MAX_PAGES_PER_RUN,
@@ -7,7 +7,7 @@ import {
   SHORTS_PROBE_ENABLED,
 } from "@/lib/constants";
 import type { Db } from "@/lib/db/client";
-import { channels, playlistItems, videos, watchState } from "@/lib/db/schema";
+import { channels, playlistItems, videos } from "@/lib/db/schema";
 import { isPlaylistNotFound, isQuotaExceeded, type VideoDetails, type YouTubeClient } from "@/lib/youtube/client";
 import { livesPlaylistId, longVideosPlaylistId, uploadsPlaylistId } from "@/lib/youtube/parse";
 import type { StoredImage } from "@/lib/youtube/avatar";
@@ -127,8 +127,8 @@ export async function syncChannel(deps: SyncDeps, channelId: string): Promise<Ch
     await db.insert(videos).values(rows.slice(i, i + 500)).onConflictDoNothing();
   }
 
-  // 5. Re-check lives that were upcoming or still running, plus videos the user can still reach
-  //    (in the feed or in a playlist), so deleted/private ones disappear.
+  // 5. Re-check lives that were upcoming or still running, plus videos someone can still reach
+  //    (still new enough for a feed, or in a playlist), so deleted/private ones disappear.
   const newIdSet = new Set(newIds);
   const pendingLives = (
     await db
@@ -142,13 +142,12 @@ export async function syncChannel(deps: SyncDeps, channelId: string): Promise<Ch
     await db
       .select({ id: videos.id })
       .from(videos)
-      .leftJoin(watchState, eq(watchState.videoId, videos.id))
       .where(
         and(
           eq(videos.channelId, channelId),
           ne(videos.liveState, "pending"),
           or(
-            and(eq(videos.inFeed, true), isNull(videos.dismissedAt), not(sql`coalesce(${watchState.watched}, false)`)),
+            and(eq(videos.inFeed, true), gte(videos.publishedAt, new Date(feedCutoff))),
             exists(db.select({ one: sql`1` }).from(playlistItems).where(eq(playlistItems.videoId, videos.id))),
           ),
         ),

@@ -19,7 +19,7 @@ Um "YouTube pessoal": só vídeos dos canais que você escolher, **sem Shorts**,
 | --- | --- |
 | `YOUTUBE_API_KEY` | Chave da YouTube Data API v3. Fica só no servidor. |
 | `DATABASE_URL` | Connection string do Neon (PostgreSQL). |
-| `APP_PASSWORD` | Senha para entrar no app. |
+| `APP_PASSWORD` | Código de convite exigido para criar uma conta. A primeira conta criada herda os dados que já existiam. |
 | `SESSION_SECRET` | Segredo longo e aleatório que assina o cookie de login. |
 | `CRON_SECRET` | Segredo que a Vercel Cron envia para `/api/cron/sync`. |
 

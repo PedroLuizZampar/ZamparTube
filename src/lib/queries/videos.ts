@@ -1,7 +1,17 @@
-import { and, desc, eq, gte, inArray, isNull, not, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, exists, gte, inArray, not, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { FEED_WINDOW_DAYS } from "@/lib/constants";
 import type { Db } from "@/lib/db/client";
-import { channelCategories, channels, playlistItems, playlists, videos, watchState } from "@/lib/db/schema";
+import {
+  categories,
+  channelCategories,
+  channels,
+  feedDismissals,
+  playlistItems,
+  playlists,
+  userChannels,
+  videos,
+  watchState,
+} from "@/lib/db/schema";
 import { avatarSrcSql } from "./avatar";
 import { visibleVideoCondition } from "./visibility";
 
@@ -18,7 +28,7 @@ export interface VideoCardData {
   isLiveRecording: boolean;
   positionSeconds: number;
   watched: boolean;
-  /** In the "Assistir depois" playlist. */
+  /** In the user's "Assistir depois" playlist. */
   savedForLater: boolean;
 }
 
@@ -27,7 +37,8 @@ export interface VideoPage {
   hasMore: boolean;
 }
 
-export const cardFields = {
+/** Card columns; the watch state and "Assistir depois" are the given user's (left join `watchStateOf(userId)`). */
+export const cardFields = (userId: number) => ({
   id: videos.id,
   title: videos.title,
   channelId: videos.channelId,
@@ -40,17 +51,29 @@ export const cardFields = {
   isLiveRecording: videos.isLiveRecording,
   positionSeconds: sql<number>`coalesce(${watchState.positionSeconds}, 0)`.mapWith(Number),
   watched: sql<boolean>`coalesce(${watchState.watched}, false)`.mapWith(Boolean),
-  savedForLater: sql<boolean>`exists (select 1 from ${playlistItems} inner join ${playlists} on ${playlists.id} = ${playlistItems.playlistId} where ${playlists.isWatchLater} = true and ${playlistItems.videoId} = ${videos.id})`.mapWith(Boolean),
-};
+  savedForLater: sql<boolean>`exists (select 1 from ${playlistItems} inner join ${playlists} on ${playlists.id} = ${playlistItems.playlistId} where ${playlists.isWatchLater} = true and ${playlists.userId} = ${userId} and ${playlistItems.videoId} = ${videos.id})`.mapWith(Boolean),
+});
+
+/** Join condition for the user's watch state of `videos.id` (left join: never-opened videos have no row). */
+export const watchStateOf = (userId: number) => and(eq(watchState.videoId, videos.id), eq(watchState.userId, userId))!;
+
+/** The video's channel is one the user follows. */
+export const followedBy = (db: Db, userId: number) =>
+  exists(
+    db
+      .select({ one: sql`1` })
+      .from(userChannels)
+      .where(and(eq(userChannels.userId, userId), eq(userChannels.channelId, videos.channelId))),
+  );
 
 const isWatched = sql`coalesce(${watchState.watched}, false)`;
 
-function cardQuery(db: Db, where: SQL | undefined) {
+function cardQuery(db: Db, userId: number, where: SQL | undefined) {
   return db
-    .select(cardFields)
+    .select(cardFields(userId))
     .from(videos)
     .innerJoin(channels, eq(channels.id, videos.channelId))
-    .leftJoin(watchState, eq(watchState.videoId, videos.id))
+    .leftJoin(watchState, watchStateOf(userId))
     .where(and(visibleVideoCondition(), where));
 }
 
@@ -61,7 +84,7 @@ export function toPage(rows: VideoCardData[], limit: number): VideoPage {
 /** Category/channel filters shared by the feed and the history. Categories OR'd, channels OR'd, lists AND'd. */
 export function filterCondition(f: { categoryIds?: number[]; channelIds?: string[] }): SQL | undefined {
   return and(
-    // A channel matches when it is in any selected category.
+    // A channel matches when it is in any selected category (category ids are already the user's own).
     f.categoryIds?.length
       ? inArray(
           videos.channelId,
@@ -73,25 +96,63 @@ export function filterCondition(f: { categoryIds?: number[]; channelIds?: string
 }
 
 /**
- * New, unwatched, undismissed videos from active channels published in the last FEED_WINDOW_DAYS.
+ * Channels in a category the user hid from the home feed show up only when the filter asks for them: by naming the
+ * channel, or by selecting a hidden category the channel is in. Being hidden wins: a channel in a hidden category
+ * stays out even when it is also in a visible one.
+ */
+export function hiddenFromHomeCondition(
+  db: Db,
+  userId: number,
+  f: { categoryIds?: number[]; channelIds?: string[] },
+): SQL | undefined {
+  const selected = f.categoryIds ?? [];
+  const hiddenChannels = db
+    .select({ id: channelCategories.channelId })
+    .from(channelCategories)
+    .innerJoin(categories, eq(categories.id, channelCategories.categoryId))
+    .where(
+      and(
+        eq(categories.userId, userId),
+        eq(categories.hiddenFromHome, true),
+        selected.length ? notInArray(categories.id, selected) : undefined,
+      ),
+    );
+  return or(
+    notInArray(videos.channelId, hiddenChannels),
+    f.channelIds?.length ? inArray(videos.channelId, f.channelIds) : undefined,
+  );
+}
+
+/**
+ * New, unwatched, undismissed videos from the user's channels published in the last FEED_WINDOW_DAYS.
  * Categories are OR'd, channels are OR'd, and the two lists are AND'd; an empty list means no filter.
+ * Channels in categories hidden from home appear only when filtered for (see hiddenFromHomeCondition).
  * The feed ends when this is empty.
  */
 export async function listFeed(
   db: Db,
+  userId: number,
   opts: { categoryIds?: number[]; channelIds?: string[]; limit: number; now?: Date },
 ): Promise<VideoPage> {
   const now = opts.now ?? new Date();
   const since = new Date(now.getTime() - FEED_WINDOW_DAYS * 86_400_000);
+  const dismissed = exists(
+    db
+      .select({ one: sql`1` })
+      .from(feedDismissals)
+      .where(and(eq(feedDismissals.userId, userId), eq(feedDismissals.videoId, videos.id))),
+  );
   const rows = await cardQuery(
     db,
+    userId,
     and(
       eq(videos.inFeed, true),
-      isNull(videos.dismissedAt),
+      not(dismissed),
       not(isWatched),
-      isNull(channels.removedAt),
+      followedBy(db, userId),
       gte(videos.publishedAt, since),
       filterCondition(opts),
+      hiddenFromHomeCondition(db, userId, opts),
     ),
   )
     .orderBy(desc(videos.publishedAt), videos.id)
@@ -100,34 +161,40 @@ export async function listFeed(
 }
 
 /** Every visible video of one channel, newest first, watched ones included. */
-export async function listChannelVideos(db: Db, channelId: string, opts: { limit: number }): Promise<VideoPage> {
-  const rows = await cardQuery(db, eq(videos.channelId, channelId))
+export async function listChannelVideos(
+  db: Db,
+  userId: number,
+  channelId: string,
+  opts: { limit: number },
+): Promise<VideoPage> {
+  const rows = await cardQuery(db, userId, eq(videos.channelId, channelId))
     .orderBy(desc(videos.publishedAt), videos.id)
     .limit(opts.limit + 1);
   return toPage(rows, opts.limit);
 }
 
-/** Full-text search (Portuguese) over title and description of visible videos from active channels. */
-export async function searchVideos(db: Db, q: string, opts: { limit: number }): Promise<VideoPage> {
+/** Full-text search (Portuguese) over title and description of visible videos from the user's channels. */
+export async function searchVideos(db: Db, userId: number, q: string, opts: { limit: number }): Promise<VideoPage> {
   const query = q.trim();
   if (!query) return { items: [], hasMore: false };
   const tsQuery = sql`websearch_to_tsquery('portuguese', ${query})`;
-  const rows = await cardQuery(db, and(isNull(channels.removedAt), sql`${videos.searchVector} @@ ${tsQuery}`))
+  const rows = await cardQuery(db, userId, and(followedBy(db, userId), sql`${videos.searchVector} @@ ${tsQuery}`))
     .orderBy(sql`ts_rank(${videos.searchVector}, ${tsQuery}) desc`, desc(videos.publishedAt))
     .limit(opts.limit + 1);
   return toPage(rows, opts.limit);
 }
 
-/** A single video for the watch page, or null if it must not be shown. */
+/** A single video for the watch page (with the user's progress), or null if it must not be shown. */
 export async function getVisibleVideo(
   db: Db,
+  userId: number,
   id: string,
 ): Promise<(VideoCardData & { description: string }) | null> {
   const [row] = await db
-    .select({ ...cardFields, description: videos.description })
+    .select({ ...cardFields(userId), description: videos.description })
     .from(videos)
     .innerJoin(channels, eq(channels.id, videos.channelId))
-    .leftJoin(watchState, eq(watchState.videoId, videos.id))
+    .leftJoin(watchState, watchStateOf(userId))
     .where(and(visibleVideoCondition(), eq(videos.id, id)));
   return row ?? null;
 }

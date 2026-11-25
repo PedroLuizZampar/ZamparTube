@@ -5,25 +5,28 @@ export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 90;
 
 const key = (secret: string) => new TextEncoder().encode(secret);
 
-export async function createSessionToken(secret: string): Promise<string> {
-  return new SignJWT({ sub: "owner" })
+/** A session belongs to one account: the token's subject is the user id. */
+export async function createSessionToken(userId: number, secret: string): Promise<string> {
+  return new SignJWT({ sub: String(userId) })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE_SECONDS}s`)
     .sign(key(secret));
 }
 
-export async function verifySessionToken(token: string | undefined, secret: string): Promise<boolean> {
-  if (!token) return false;
+/** The user id of a valid token, or null (also for tokens from before accounts existed, whose subject was "owner"). */
+export async function verifySessionToken(token: string | undefined, secret: string): Promise<number | null> {
+  if (!token) return null;
   try {
-    await jwtVerify(token, key(secret), { algorithms: ["HS256"] });
-    return true;
+    const { payload } = await jwtVerify(token, key(secret), { algorithms: ["HS256"] });
+    const id = Number(payload.sub);
+    return Number.isInteger(id) && id > 0 ? id : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-/** Constant-time string comparison (runs in any runtime, no node:crypto needed). */
+/** Constant-time string comparison (used for the invite code) (runs in any runtime, no node:crypto needed). */
 export function checkPassword(input: string, expected: string): boolean {
   const a = new TextEncoder().encode(input);
   const b = new TextEncoder().encode(expected);
@@ -33,7 +36,7 @@ export function checkPassword(input: string, expected: string): boolean {
   return diff === 0 && expected.length > 0;
 }
 
-const PUBLIC_EXACT = new Set(["/login", "/api/cron/sync", "/manifest.webmanifest", "/favicon.ico"]);
+const PUBLIC_EXACT = new Set(["/login", "/signup", "/api/cron/sync", "/manifest.webmanifest", "/favicon.ico"]);
 
 /** Paths reachable without a session. */
 export function isPublicPath(pathname: string): boolean {

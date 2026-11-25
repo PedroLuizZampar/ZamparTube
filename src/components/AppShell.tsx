@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ListOrdered, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { AccountMenu, type Account } from "./AccountMenu";
 import { Logo, LogoMark } from "./Logo";
 import { BottomNav, SideNav } from "./Nav";
 import { PullToRefresh } from "./PullToRefresh";
@@ -14,10 +15,12 @@ export function AppShell({
   children,
   queueCount,
   initialCollapsed,
+  account,
 }: {
   children: ReactNode;
   queueCount: number;
   initialCollapsed: boolean;
+  account: Account;
 }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const first = useRef(true);
@@ -69,8 +72,9 @@ export function AppShell({
           </div>
         )}
         <SideNav queueCount={queueCount} collapsed={collapsed} />
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col gap-3">
           <SyncButton collapsed={collapsed} />
+          <AccountMenu account={account} collapsed={collapsed} />
         </div>
       </aside>
 
@@ -78,7 +82,24 @@ export function AppShell({
         <Link href="/">
           <Logo />
         </Link>
-        <SyncButton compact />
+        <div className="flex items-center gap-1.5">
+          {/* The tab bar has no room for the queue, so phones reach it from here. */}
+          <Link
+            href="/queue"
+            aria-label={queueCount > 0 ? `Fila (${queueCount})` : "Fila"}
+            title="Fila"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-text"
+          >
+            <ListOrdered className="h-5 w-5" strokeWidth={1.75} />
+            {queueCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] font-semibold leading-4 tabular-nums text-on-accent">
+                {queueCount}
+              </span>
+            )}
+          </Link>
+          <SyncButton compact />
+          <AccountMenu account={account} compact />
+        </div>
       </header>
 
       <main

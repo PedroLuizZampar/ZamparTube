@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
 import { createTestDb } from "../../helpers/db";
 import { NOW } from "../../helpers/fake-youtube";
-import { addToCategory, CH_A, CH_B, insertCategory, insertChannel, insertVideo } from "../../helpers/fixtures";
-import { channels, watchState } from "@/lib/db/schema";
+import { addToCategory, CH_A, CH_B, insertCategory, insertChannel, insertVideo, U, unfollow } from "../../helpers/fixtures";
+import { watchState } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/client";
 import { listContinueWatching, listWatchedHistory } from "@/lib/queries/history";
+import { dismissFromFeed } from "@/lib/queries/watch";
 
 let db: Db;
 
@@ -13,7 +13,7 @@ const minutesAfter = (m: number) => new Date(NOW.getTime() + m * 60_000);
 const ids = (r: { items: { id: string }[] }) => r.items.map((v) => v.id);
 
 async function watch(videoId: string, positionSeconds: number, watched: boolean, at: Date) {
-  await db.insert(watchState).values({ videoId, positionSeconds, watched, updatedAt: at });
+  await db.insert(watchState).values({ userId: U, videoId, positionSeconds, watched, updatedAt: at });
 }
 
 beforeEach(async () => {
@@ -31,13 +31,14 @@ describe("listContinueWatching", () => {
     await watch("t1", 60, false, minutesAfter(1));
     await watch("t2", 30, false, minutesAfter(2));
     await watch("done", 590, true, minutesAfter(3));
-    expect(ids(await listContinueWatching(db, { limit: 10 }))).toEqual(["t2", "t1"]);
+    expect(ids(await listContinueWatching(db, U, { limit: 10 }))).toEqual(["t2", "t1"]);
   });
 
   it("includes dismissed and old videos (no feed window)", async () => {
-    await insertVideo(db, "old", { publishedAt: new Date("2020-01-01T00:00:00Z"), inFeed: false, dismissedAt: NOW });
+    await insertVideo(db, "old", { publishedAt: new Date("2020-01-01T00:00:00Z"), inFeed: false });
+    await dismissFromFeed(db, U, "old");
     await watch("old", 60, false, minutesAfter(1));
-    expect(ids(await listContinueWatching(db, { limit: 10 }))).toEqual(["old"]);
+    expect(ids(await listContinueWatching(db, U, { limit: 10 }))).toEqual(["old"]);
   });
 });
 
@@ -49,7 +50,7 @@ describe("listWatchedHistory", () => {
     await watch("w1", 590, true, minutesAfter(1));
     await watch("w2", 0, true, minutesAfter(2));
     await watch("half", 100, false, minutesAfter(3));
-    expect(ids(await listWatchedHistory(db, { limit: 10 }))).toEqual(["w2", "w1"]);
+    expect(ids(await listWatchedHistory(db, U, { limit: 10 }))).toEqual(["w2", "w1"]);
   });
 
   it("returns hasMore when there are more than limit items", async () => {
@@ -57,7 +58,7 @@ describe("listWatchedHistory", () => {
     await insertVideo(db, "w2");
     await watch("w1", 590, true, minutesAfter(1));
     await watch("w2", 590, true, minutesAfter(2));
-    const page = await listWatchedHistory(db, { limit: 1 });
+    const page = await listWatchedHistory(db, U, { limit: 1 });
     expect(ids(page)).toEqual(["w2"]);
     expect(page.hasMore).toBe(true);
   });
@@ -71,8 +72,8 @@ describe("history visibility", () => {
     await watch("rec", 60, false, minutesAfter(1));
     await watch("gone", 60, false, minutesAfter(2));
     await watch("ok", 60, false, minutesAfter(3));
-    await db.update(channels).set({ removedAt: NOW }).where(eq(channels.id, CH_B));
-    expect(ids(await listContinueWatching(db, { limit: 10 }))).toEqual(["ok"]);
+    await unfollow(db, CH_B);
+    expect(ids(await listContinueWatching(db, U, { limit: 10 }))).toEqual(["ok"]);
   });
 });
 
@@ -89,9 +90,9 @@ describe("history filters", () => {
     await watch("a-done", 590, true, minutesAfter(3));
     await watch("b-done", 590, true, minutesAfter(4));
 
-    expect(ids(await listContinueWatching(db, { limit: 10, categoryIds: [cat] }))).toEqual(["b-half"]);
-    expect(ids(await listWatchedHistory(db, { limit: 10, categoryIds: [cat] }))).toEqual(["b-done"]);
-    expect(ids(await listContinueWatching(db, { limit: 10, channelIds: [CH_A] }))).toEqual(["a-half"]);
-    expect(ids(await listWatchedHistory(db, { limit: 10, channelIds: [CH_A] }))).toEqual(["a-done"]);
+    expect(ids(await listContinueWatching(db, U, { limit: 10, categoryIds: [cat] }))).toEqual(["b-half"]);
+    expect(ids(await listWatchedHistory(db, U, { limit: 10, categoryIds: [cat] }))).toEqual(["b-done"]);
+    expect(ids(await listContinueWatching(db, U, { limit: 10, channelIds: [CH_A] }))).toEqual(["a-half"]);
+    expect(ids(await listWatchedHistory(db, U, { limit: 10, channelIds: [CH_A] }))).toEqual(["a-done"]);
   });
 });

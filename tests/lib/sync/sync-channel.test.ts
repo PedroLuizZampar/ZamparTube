@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "../../helpers/db";
 import { createFakeYouTube, daysAgo, NOW, vid, type FakeYouTube } from "../../helpers/fake-youtube";
-import { channels, playlistItems, playlists, videos } from "@/lib/db/schema";
+import { U } from "../../helpers/fixtures";
+import { channels, playlistItems, playlists, userChannels, videos } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/client";
 import { syncChannel, type SyncDeps } from "@/lib/sync/sync-channel";
 import type { ProbeResult } from "@/lib/youtube/shorts-probe";
@@ -17,6 +18,7 @@ let db: Db;
 
 async function addChannel(extra: Partial<typeof channels.$inferInsert> = {}) {
   await db.insert(channels).values({ id: CH, title: "Canal", avatarUrl: "", uploadsPlaylistId: UU, ...extra });
+  await db.insert(userChannels).values({ userId: U, channelId: CH });
 }
 
 function deps(yt: FakeYouTube, probe: (id: string) => Promise<ProbeResult> = async () => "not_short"): SyncDeps {
@@ -220,13 +222,13 @@ describe("syncChannel", () => {
     await syncChannel(deps(yt, async (id) => (id === "short" ? "short" : "unknown")), CH);
 
     const seen = [
-      ...(await listFeed(db, { now: NOW, limit: 50 })).items,
-      ...(await searchVideos(db, "programação", { limit: 50 })).items,
-      ...(await listChannelVideos(db, CH, { limit: 50 })).items,
+      ...(await listFeed(db, U, { now: NOW, limit: 50 })).items,
+      ...(await searchVideos(db, U, "programação", { limit: 50 })).items,
+      ...(await listChannelVideos(db, U, CH, { limit: 50 })).items,
     ].map((v) => v.id);
     expect(new Set(seen)).toEqual(new Set(["long"]));
-    expect(await getVisibleVideo(db, "short")).toBeNull();
-    expect(await getVisibleVideo(db, "unverified")).toBeNull();
+    expect(await getVisibleVideo(db, U, "short")).toBeNull();
+    expect(await getVisibleVideo(db, U, "unverified")).toBeNull();
   });
 });
 

@@ -3,6 +3,7 @@ import { BackButton } from "@/components/BackButton";
 import { LoadMore } from "@/components/LoadMore";
 import { canLoadMore, pageLimit } from "@/lib/paging";
 import { VideoCard, VideoGrid } from "@/components/VideoCard";
+import { requireUserId } from "@/lib/auth/require";
 import { getDb } from "@/lib/db/client";
 import { getChannel } from "@/lib/queries/channels";
 import { ChannelAvatar } from "@/components/ChannelAvatar";
@@ -10,12 +11,13 @@ import { listChannelVideos } from "@/lib/queries/videos";
 
 export default async function ChannelPage({ params, searchParams }: PageProps<"/channel/[id]">) {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
+  const userId = await requireUserId();
   const db = getDb();
-  const channel = await getChannel(db, id);
+  const channel = await getChannel(db, userId, id);
   if (!channel) notFound();
 
   const limit = pageLimit(sp.n);
-  const page = await listChannelVideos(db, id, { limit });
+  const page = await listChannelVideos(db, userId, id, { limit });
 
   return (
     <>

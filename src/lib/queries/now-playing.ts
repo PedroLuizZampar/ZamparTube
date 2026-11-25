@@ -20,9 +20,17 @@ export interface CurrentVideo {
   source: NavSource;
 }
 
-/** Builds the player's view of a video, or null if it cannot be shown. `listId` must be an existing playlist. */
-export async function loadNowPlaying(db: Db, id: string, listId: number | null): Promise<CurrentVideo | null> {
-  const [video, nav] = await Promise.all([getVisibleVideo(db, id), resolveWatchNav(db, id, listId)]);
+/** Builds the player's view of a video, or null if it cannot be shown. `listId` must be one of the user's playlists. */
+export async function loadNowPlaying(
+  db: Db,
+  userId: number,
+  id: string,
+  listId: number | null,
+): Promise<CurrentVideo | null> {
+  const [video, nav] = await Promise.all([
+    getVisibleVideo(db, userId, id),
+    resolveWatchNav(db, userId, id, listId),
+  ]);
   if (!video) return null;
   return {
     id: video.id,

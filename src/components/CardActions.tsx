@@ -27,8 +27,9 @@ const overlayButton =
 const revealOnHover = "text-white/85 hover:text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100";
 
 /**
- * Quick actions on a video card. Devices with hover get icon buttons over the thumbnail's corner (so they never
- * squeeze the title); touch devices get a ⋮ button with the same actions in a menu.
+ * Quick actions on a video card. Wide screens with hover get icon buttons over the thumbnail's corner (so they never
+ * squeeze the title); small screens and touch devices get a ⋮ button on the title's line with the same actions in a
+ * menu. Small screens always get the ⋮: some phones report hover, and a hover-only overlay is unusable there.
  * The card must be `relative`: the hover icons are placed against it.
  */
 export function CardActions({ videoId, title, savedForLater, canDismiss, canRemoveFromHistory = false }: Props) {
@@ -70,13 +71,13 @@ export function CardActions({ videoId, title, savedForLater, canDismiss, canRemo
     <div ref={rootRef} className="flex shrink-0 items-start">
       {/* Touch devices: the saved state is visible on the card itself, not only inside the ⋮ menu. */}
       {saved && (
-        <span className="p-2.5 text-accent [@media(hover:hover)]:hidden" title={`Salvo em “${listName}”`}>
+        <span className="p-2.5 text-accent md:[@media(hover:hover)]:hidden" title={`Salvo em “${listName}”`}>
           <Clock className="h-4 w-4" strokeWidth={2.5} aria-hidden />
           <span className="sr-only">Salvo em “{listName}”</span>
         </span>
       )}
       {/* Hover devices: icons over the thumbnail, revealed on card hover or keyboard focus. Saved state stays visible. */}
-      <div className="absolute right-2 top-2 z-10 hidden gap-1 [@media(hover:hover)]:flex">
+      <div className="absolute right-2 top-2 z-10 hidden gap-1 md:[@media(hover:hover)]:flex">
         <button
           type="button"
           onClick={toggleSaved}
@@ -133,8 +134,8 @@ export function CardActions({ videoId, title, savedForLater, canDismiss, canRemo
         )}
       </div>
 
-      {/* Touch devices: ⋮ menu. */}
-      <div className="[@media(hover:hover)]:hidden">
+      {/* Small screens and touch devices: ⋮ menu. */}
+      <div className="md:[@media(hover:hover)]:hidden">
         {/* Modal (default): a tap outside only closes the menu instead of also opening the video underneath. */}
         <DM.Root>
           <DM.Trigger

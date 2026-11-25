@@ -29,16 +29,42 @@ const imageColumns = () => ({
   imageUpdatedAt: timestamp("image_updated_at", { withTimezone: true }),
 });
 
+/**
+ * App accounts. A row with a null password hash is the placeholder owner created by migration 0007 for the data that
+ * existed before accounts: the first account created takes it over (and with it, everything it owns).
+ */
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    username: text("username").notNull(),
+    passwordHash: text("password_hash"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Profile photo (base64), served to its owner by /profile-image. */
+    ...imageColumns(),
+  },
+  // Usernames are unique ignoring case.
+  (t) => [uniqueIndex("users_username_lower_unique").on(sql`lower(${t.username})`)],
+);
+
+const userId = () =>
+  integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" });
+
 export const categories = pgTable(
   "categories",
   {
     id: serial("id").primaryKey(),
+    userId: userId(),
     name: text("name").notNull(),
     position: integer("position").notNull().default(0),
+    /** Channels in a hidden category only show on the home feed when filtered by that category or by the channel. */
+    hiddenFromHome: boolean("hidden_from_home").notNull().default(false),
     ...imageColumns(),
   },
-  // Names are unique ignoring case ("Música" and "música" cannot coexist).
-  (t) => [uniqueIndex("categories_name_lower_unique").on(sql`lower(${t.name})`)],
+  // Names are unique per user ignoring case ("Música" and "música" cannot coexist).
+  (t) => [uniqueIndex("categories_user_name_lower_unique").on(t.userId, sql`lower(${t.name})`)],
 );
 
 export const channels = pgTable("channels", {
@@ -58,7 +84,23 @@ export const channels = pgTable("channels", {
   avatarFetchedAt: timestamp("avatar_fetched_at", { withTimezone: true }),
 });
 
-/** A channel can be in several categories. */
+/**
+ * Which user follows which channel. Channels and videos are shared (synced once); a channel is synced while
+ * someone follows it (`channels.removed_at` is set when the last follower leaves).
+ */
+export const userChannels = pgTable(
+  "user_channels",
+  {
+    userId: userId(),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.channelId] }), index("user_channels_channel_idx").on(t.channelId)],
+);
+
+/** A channel can be in several categories (categories belong to a user). */
 export const channelCategories = pgTable(
   "channel_categories",
   {
@@ -91,7 +133,6 @@ export const videos = pgTable(
     isLiveRecording: boolean("is_live_recording").notNull().default(false),
     liveState: liveStateEnum("live_state").notNull(),
     inFeed: boolean("in_feed").notNull(),
-    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
     searchVector: tsvector("search_vector").generatedAlwaysAs(
       (): SQL =>
         sql`to_tsvector('portuguese', coalesce(${videos.title}, '') || ' ' || coalesce(${videos.description}, ''))`,
@@ -104,28 +145,47 @@ export const videos = pgTable(
   ],
 );
 
-export const watchState = pgTable("watch_state", {
-  videoId: text("video_id")
-    .primaryKey()
-    .references(() => videos.id, { onDelete: "cascade" }),
-  positionSeconds: integer("position_seconds").notNull().default(0),
-  watched: boolean("watched").notNull().default(false),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const watchState = pgTable(
+  "watch_state",
+  {
+    userId: userId(),
+    videoId: text("video_id")
+      .notNull()
+      .references(() => videos.id, { onDelete: "cascade" }),
+    positionSeconds: integer("position_seconds").notNull().default(0),
+    watched: boolean("watched").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.videoId] })],
+);
+
+/** Videos a user took out of their feed without watching them. */
+export const feedDismissals = pgTable(
+  "feed_dismissals",
+  {
+    userId: userId(),
+    videoId: text("video_id")
+      .notNull()
+      .references(() => videos.id, { onDelete: "cascade" }),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.videoId] })],
+);
 
 export const playlists = pgTable(
   "playlists",
   {
     id: serial("id").primaryKey(),
+    userId: userId(),
     name: text("name").notNull(),
     isWatchLater: boolean("is_watch_later").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     ...imageColumns(),
   },
   (t) => [
-    uniqueIndex("playlists_single_watch_later").on(t.isWatchLater).where(sql`${t.isWatchLater} = true`),
-    // Names are unique ignoring case ("Estudos" and "estudos" cannot coexist).
-    uniqueIndex("playlists_name_lower_unique").on(sql`lower(${t.name})`),
+    uniqueIndex("playlists_single_watch_later").on(t.userId).where(sql`${t.isWatchLater} = true`),
+    // Names are unique per user ignoring case ("Estudos" and "estudos" cannot coexist).
+    uniqueIndex("playlists_user_name_lower_unique").on(t.userId, sql`lower(${t.name})`),
   ],
 );
 
@@ -151,12 +211,13 @@ export const playlistItems = pgTable(
 export const queueItems = pgTable(
   "queue_items",
   {
+    userId: userId(),
     videoId: text("video_id")
-      .primaryKey()
+      .notNull()
       .references(() => videos.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
     playedAt: timestamp("played_at", { withTimezone: true }),
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("queue_items_played_idx").on(t.playedAt)],
+  (t) => [primaryKey({ columns: [t.userId, t.videoId] }), index("queue_items_user_played_idx").on(t.userId, t.playedAt)],
 );

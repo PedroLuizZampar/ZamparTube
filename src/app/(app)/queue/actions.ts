@@ -1,6 +1,6 @@
 "use server";
 
-import { requireSession } from "@/lib/auth/require";
+import { requireUserId } from "@/lib/auth/require";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db/client";
 import { loadNowPlaying, type CurrentVideo } from "@/lib/queries/now-playing";
@@ -26,67 +26,67 @@ function assertPlaylist(id: number) {
 const done = () => revalidatePath("/", "layout");
 
 export async function enqueueAction(videoIds: string[], mode: "end" | "next"): Promise<void> {
-  await requireSession();
+  const userId = await requireUserId();
   if (!Array.isArray(videoIds) || videoIds.length > 500) throw new Error("Lista inválida");
   videoIds.forEach(assertVideo);
-  await enqueue(getDb(), videoIds, mode === "next" ? "next" : "end");
+  await enqueue(getDb(), userId, videoIds, mode === "next" ? "next" : "end");
   done();
 }
 
 export async function removeFromQueueAction(videoId: string): Promise<void> {
-  await requireSession();
+  const userId = await requireUserId();
   assertVideo(videoId);
-  await removeFromQueue(getDb(), videoId);
+  await removeFromQueue(getDb(), userId, videoId);
   done();
 }
 
 export async function moveInQueueAction(videoId: string, toIndex: number): Promise<void> {
-  await requireSession();
+  const userId = await requireUserId();
   assertVideo(videoId);
   if (!Number.isInteger(toIndex) || toIndex < 0) throw new Error("Posição inválida");
-  await moveInQueue(getDb(), videoId, toIndex);
+  await moveInQueue(getDb(), userId, videoId, toIndex);
   done();
 }
 
 export async function clearQueueAction(): Promise<void> {
-  await requireSession();
-  await clearQueue(getDb());
+  const userId = await requireUserId();
+  await clearQueue(getDb(), userId);
   done();
 }
 
 /** "Tocar tudo": the queue becomes the playlist. Returns the first video to open, or null if it is empty. */
 export async function playPlaylistAction(playlistId: number): Promise<string | null> {
-  await requireSession();
+  const userId = await requireUserId();
   assertPlaylist(playlistId);
   const db = getDb();
-  const ids = (await listPlaylistVideos(db, playlistId)).map((v) => v.id);
-  await replaceQueue(db, ids);
+  const ids = (await listPlaylistVideos(db, userId, playlistId)).map((v) => v.id);
+  await replaceQueue(db, userId, ids);
   done();
   return ids[0] ?? null;
 }
 
 export async function enqueuePlaylistAction(playlistId: number): Promise<void> {
-  await requireSession();
+  const userId = await requireUserId();
   assertPlaylist(playlistId);
   const db = getDb();
-  await enqueue(db, (await listPlaylistVideos(db, playlistId)).map((v) => v.id), "end");
+  await enqueue(db, userId, (await listPlaylistVideos(db, userId, playlistId)).map((v) => v.id), "end");
   done();
 }
 
 /** The video started playing: it becomes where the queue stopped (it stays in the queue). */
 export async function markPlayingAction(videoId: string): Promise<void> {
-  await requireSession();
+  const userId = await requireUserId();
   assertVideo(videoId);
-  await markPlaying(getDb(), videoId);
+  await markPlaying(getDb(), userId, videoId);
   done();
 }
 
 /** The mini player moves on (⏮/⏭, autoplay) without leaving the page: what it should play next. */
 export async function loadNowPlayingAction(videoId: string, listId: number | null): Promise<CurrentVideo | null> {
-  await requireSession();
+  const userId = await requireUserId();
   assertVideo(videoId);
   const db = getDb();
   if (listId !== null) assertPlaylist(listId);
-  const list = listId !== null && (await getPlaylist(db, listId)) ? listId : null;
-  return loadNowPlaying(db, videoId, list);
+  const list = listId !== null && (await getPlaylist(db, userId, listId)) ? listId : null;
+  return loadNowPlaying(db, userId, videoId, list);
 }

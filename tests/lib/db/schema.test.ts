@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { U } from "../../helpers/fixtures";
 import { sql } from "drizzle-orm";
 import { createTestDb } from "../../helpers/db";
 import { channels, playlists, videos } from "@/lib/db/schema";
@@ -18,7 +19,7 @@ describe("schema", () => {
 
   it("rejects a second watch-later playlist", async () => {
     const db = await createTestDb();
-    await expect(db.insert(playlists).values({ name: "Outra", isWatchLater: true })).rejects.toThrow();
+    await expect(db.insert(playlists).values({ userId: U, name: "Outra", isWatchLater: true })).rejects.toThrow();
   });
 
   it("search_vector matches portuguese stems", async () => {

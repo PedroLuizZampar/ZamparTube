@@ -1,18 +1,28 @@
 import { describe, expect, it } from "vitest";
+import { SignJWT } from "jose";
 import { checkPassword, createSessionToken, isPublicPath, verifySessionToken } from "@/lib/auth/session";
 
 const SECRET = "a-very-long-secret-value-for-tests-1234567890";
 
 describe("session token", () => {
-  it("roundtrip verifies", async () => {
-    expect(await verifySessionToken(await createSessionToken(SECRET), SECRET)).toBe(true);
+  it("roundtrip gives back the user id", async () => {
+    expect(await verifySessionToken(await createSessionToken(42, SECRET), SECRET)).toBe(42);
   });
 
   it("fails with a wrong secret, garbage or undefined", async () => {
-    const token = await createSessionToken(SECRET);
-    expect(await verifySessionToken(token, "another-secret-another-secret-123456")).toBe(false);
-    expect(await verifySessionToken("garbage", SECRET)).toBe(false);
-    expect(await verifySessionToken(undefined, SECRET)).toBe(false);
+    const token = await createSessionToken(7, SECRET);
+    expect(await verifySessionToken(token, "another-secret-another-secret-123456")).toBeNull();
+    expect(await verifySessionToken("garbage", SECRET)).toBeNull();
+    expect(await verifySessionToken(undefined, SECRET)).toBeNull();
+  });
+
+  it("rejects a token from before accounts (subject 'owner')", async () => {
+    const legacy = await new SignJWT({ sub: "owner" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(new TextEncoder().encode(SECRET));
+    expect(await verifySessionToken(legacy, SECRET)).toBeNull();
   });
 });
 
@@ -28,6 +38,7 @@ describe("checkPassword", () => {
 describe("isPublicPath", () => {
   it.each([
     "/login",
+    "/signup",
     "/api/cron/sync",
     "/_next/static/x.js",
     "/_next/image",

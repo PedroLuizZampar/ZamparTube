@@ -2,14 +2,20 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Play } from "lucide-react";
 import { QueuePanel } from "@/components/QueuePanel";
+import { requireUserId } from "@/lib/auth/require";
 import { getDb } from "@/lib/db/client";
 import { listQueue, queueCursor, queueResumeId } from "@/lib/queries/queue";
 
 export const metadata: Metadata = { title: "Fila · ZamparTube" };
 
 export default async function QueuePage() {
+  const userId = await requireUserId();
   const db = getDb();
-  const [items, cursor, resumeId] = await Promise.all([listQueue(db), queueCursor(db), queueResumeId(db)]);
+  const [items, cursor, resumeId] = await Promise.all([
+    listQueue(db, userId),
+    queueCursor(db, userId),
+    queueResumeId(db, userId),
+  ]);
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">

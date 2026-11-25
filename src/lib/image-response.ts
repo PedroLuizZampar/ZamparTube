@@ -1,11 +1,14 @@
+import { currentUserId } from "@/lib/auth/require";
 import { getDb } from "@/lib/db/client";
 import { getImage, type ImageKind } from "@/lib/queries/images";
 
-/** Serves an uploaded picture. URLs carry ?v=<update time>, so the response can be cached for long. */
+/** Serves one of the signed-in user's pictures. URLs carry ?v=<update time>, so the response can be cached for long. */
 export async function imageResponse(kind: ImageKind, rawId: string): Promise<Response> {
   const id = Number(rawId);
   if (!Number.isInteger(id) || id <= 0) return new Response(null, { status: 404 });
-  const img = await getImage(getDb(), kind, id);
+  const userId = await currentUserId();
+  if (userId === null) return new Response(null, { status: 404 });
+  const img = await getImage(getDb(), userId, kind, id);
   if (!img) return new Response(null, { status: 404 });
   return new Response(Buffer.from(img.data, "base64"), {
     headers: {

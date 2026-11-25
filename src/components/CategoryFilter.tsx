@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EyeOff } from "lucide-react";
 import { feedHref, toggleCategory, type FeedFilters } from "@/lib/feed-filters";
 
 /** Multi-select category chips: each chip toggles; "Todos" clears the category selection. */
@@ -8,7 +9,7 @@ export function CategoryFilter({
   filters,
   basePath = "/",
 }: {
-  categories: Array<{ id: number; name: string; imageSrc?: string }>;
+  categories: Array<{ id: number; name: string; imageSrc?: string; hiddenFromHome?: boolean }>;
   channels: Array<{ id: string; categoryIds: number[] }>;
   filters: FeedFilters;
   /** Page the chips link to ("/" or "/history"). */
@@ -32,6 +33,8 @@ export function CategoryFilter({
       </Link>
       {categories.map((c) => {
         const active = filters.categoryIds.includes(c.id);
+        // Only the home feed leaves these out; elsewhere the mark would mean nothing.
+        const offHome = basePath === "/" && c.hiddenFromHome;
         return (
           <Link
             key={c.id}
@@ -40,12 +43,14 @@ export function CategoryFilter({
             className={chip(active, !!c.imageSrc)}
             // aria-pressed is not valid on links; aria-current marks the selected chips.
             aria-current={active ? "true" : undefined}
+            title={offHome ? "Fora da tela inicial: aparece só quando filtrada" : undefined}
           >
             {c.imageSrc && (
               // eslint-disable-next-line @next/next/no-img-element -- small same-origin image; next/image adds nothing here
               <img src={c.imageSrc} alt="" width={20} height={20} className="h-5 w-5 rounded-full object-cover" />
             )}
             {c.name}
+            {offHome && <EyeOff className="h-3.5 w-3.5 opacity-70" aria-label="(fora da tela inicial)" />}
           </Link>
         );
       })}

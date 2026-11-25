@@ -1,8 +1,8 @@
 "use server";
 
-import { requireSession } from "@/lib/auth/require";
+import { requireUserId } from "@/lib/auth/require";
 import { revalidatePath } from "next/cache";
-import { removeChannel, setChannelInCategory, upsertChannel } from "@/lib/queries/channels";
+import { followChannel, removeChannel, setChannelInCategory, upsertChannel } from "@/lib/queries/channels";
 import { QUOTA_MESSAGE } from "@/lib/sync/messages";
 import { createSyncDeps } from "@/lib/sync/run-sync";
 import { syncChannel } from "@/lib/sync/sync-channel";
@@ -26,7 +26,7 @@ function parseCategoryIds(value: FormDataEntryValue | null): number[] {
 }
 
 export async function addChannelAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireSession();
+  const userId = await requireUserId();
   const parsed = parseChannelInput(String(form.get("channel") ?? ""));
   if (!parsed.ok) return { ok: false, message: parsed.error };
 
@@ -35,9 +35,10 @@ export async function addChannelAction(_prev: ActionState, form: FormData): Prom
     const info = await deps.yt.getChannel(parsed.ref);
     if (!info) return { ok: false, message: "Canal não encontrado. Confira o link ou o @." };
     await upsertChannel(deps.db, info);
+    await followChannel(deps.db, userId, info.id);
     const categoryIds = parseCategoryIds(form.get("categoryIds"));
     // Adds the chosen categories; re-adding a channel never takes away categories it already had.
-    for (const id of categoryIds) await setChannelInCategory(deps.db, info.id, id, true).catch(() => {});
+    for (const id of categoryIds) await setChannelInCategory(deps.db, userId, info.id, id, true).catch(() => {});
     const r = await syncChannel(deps, info.id);
     done();
     const count = r.inserted === 1 ? "1 vídeo" : `${r.inserted} vídeos`;
@@ -50,15 +51,15 @@ export async function addChannelAction(_prev: ActionState, form: FormData): Prom
 }
 
 export async function removeChannelAction(channelId: string): Promise<void> {
-  await requireSession();
-  await removeChannel(getDb(), channelId);
+  const userId = await requireUserId();
+  await removeChannel(getDb(), userId, channelId);
   done();
 }
 
 /** Puts the channel in a category (on) or takes it out (off). */
 export async function setChannelCategoryAction(channelId: string, categoryId: number, on: boolean): Promise<void> {
-  await requireSession();
+  const userId = await requireUserId();
   if (!Number.isInteger(categoryId) || categoryId <= 0) return;
-  await setChannelInCategory(getDb(), channelId, categoryId, on);
+  await setChannelInCategory(getDb(), userId, channelId, categoryId, on);
   done();
 }

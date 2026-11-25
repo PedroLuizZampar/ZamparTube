@@ -3,6 +3,7 @@ import { FeedFilterBar } from "@/components/FeedFilterBar";
 import { HomeSearch } from "@/components/HomeSearch";
 import { LoadMore } from "@/components/LoadMore";
 import { VideoCard, VideoGrid } from "@/components/VideoCard";
+import { requireUserId } from "@/lib/auth/require";
 import { getDb } from "@/lib/db/client";
 import { filterParams, parseFeedFilters } from "@/lib/feed-filters";
 import { canLoadMore, pageLimit } from "@/lib/paging";
@@ -18,8 +19,9 @@ export async function generateMetadata({ searchParams }: PageProps<"/">): Promis
 
 export default async function FeedPage({ searchParams }: PageProps<"/">) {
   const sp = await searchParams;
+  const userId = await requireUserId();
   const db = getDb();
-  const [categories, channels] = await Promise.all([listCategories(db), listChannels(db)]);
+  const [categories, channels] = await Promise.all([listCategories(db, userId), listChannels(db, userId)]);
   if (channels.length === 0) return <NoChannels />;
 
   const filters = parseFeedFilters(sp, { categoryIds: categories.map((c) => c.id), channels });
@@ -27,7 +29,7 @@ export default async function FeedPage({ searchParams }: PageProps<"/">) {
   const limit = pageLimit(sp.n);
 
   if (q) {
-    const results = await searchVideos(db, q, { limit });
+    const results = await searchVideos(db, userId, q, { limit });
     return (
       <>
         <HomeSearch q={q} filters={filters} />
@@ -50,7 +52,7 @@ export default async function FeedPage({ searchParams }: PageProps<"/">) {
     );
   }
 
-  const feed = await listFeed(db, { categoryIds: filters.categoryIds, channelIds: filters.channelIds, limit });
+  const feed = await listFeed(db, userId, { categoryIds: filters.categoryIds, channelIds: filters.channelIds, limit });
 
   return (
     <>

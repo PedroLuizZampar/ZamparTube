@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Pencil, Tags } from "lucide-react";
+import { EyeOff, Pencil, Tags } from "lucide-react";
+import { requireUserId } from "@/lib/auth/require";
 import { getDb } from "@/lib/db/client";
 import { listCategories } from "@/lib/queries/channels";
-import { CategoryEditor, CreateCategoryButton, DeleteCategoryButton } from "./CategoryForms";
+import { CategoryEditor, CreateCategoryButton, DeleteCategoryButton, HideFromHomeButton } from "./CategoryForms";
 
 export const metadata: Metadata = { title: "Categorias · ZamparTube" };
 
 export default async function CategoriesPage({ searchParams }: PageProps<"/categories">) {
   const sp = await searchParams;
   const editingId = Number(Array.isArray(sp.editar) ? sp.editar[0] : sp.editar);
-  const categories = await listCategories(getDb());
+  const categories = await listCategories(getDb(), await requireUserId());
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -18,7 +19,10 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
         <h1 className="text-2xl font-semibold tracking-tight">Categorias</h1>
         <CreateCategoryButton />
       </div>
-      <p className="mb-8 text-muted">Agrupe seus canais por assunto para filtrar o feed e o histórico.</p>
+      <p className="mb-8 text-muted">
+        Agrupe seus canais por assunto para filtrar o feed e o histórico. Use o olho para tirar uma categoria da tela
+        inicial: os vídeos dos canais dela só aparecem quando você filtra pela categoria ou pelo canal.
+      </p>
 
       {categories.length === 0 ? (
         <p className="py-10 text-center text-muted">Nenhuma categoria ainda. Clique em “Criar” para começar.</p>
@@ -33,6 +37,11 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
                 ) : (
                   <span className="absolute inset-0 flex items-center justify-center text-muted">
                     <Tags className="h-8 w-8" strokeWidth={1.5} />
+                  </span>
+                )}
+                {c.hiddenFromHome && (
+                  <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-xs font-medium">
+                    <EyeOff className="h-3.5 w-3.5" /> Fora da inicial
                   </span>
                 )}
               </span>
@@ -57,6 +66,7 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
                   >
                     <Pencil className="h-4 w-4" strokeWidth={1.75} />
                   </Link>
+                  <HideFromHomeButton id={c.id} name={c.name} hidden={c.hiddenFromHome} />
                   <DeleteCategoryButton id={c.id} name={c.name} />
                 </div>
               )}
